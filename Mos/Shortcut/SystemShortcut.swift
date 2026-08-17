@@ -75,6 +75,7 @@ struct SystemShortcut {
                 case "doNotDisturb": return "moon"
                 case "showDesktop": return "rectangle.on.rectangle"
                 case "escapeKey": return "escape"
+                case "lookUp": return "text.magnifyingglass"
                 // 应用切换
                 case "switchApp": return "arrow.right.circle"
                 case "switchAppReverse": return "arrow.left.circle"
@@ -222,6 +223,8 @@ struct SystemShortcut {
     static let doNotDisturb = Shortcut("doNotDisturb", 178, .function)
     static let showDesktop = Shortcut("showDesktop", 103, .function)
     static let escapeKey = Shortcut("escapeKey", KeyCode.escape, [])
+    // 查询与快速查看 (Look Up & Data Detectors): 查词/查文件, 与触控板用力点按相同
+    static let lookUp = Shortcut("lookUp", 2, [.command, .control])  // Command-Control-D
 
     // 应用切换
     // preserveFlagsOnKeyUp: 用于确保 KeyUp 时携带 flag, 才能触发 App Switcher
@@ -299,7 +302,7 @@ struct SystemShortcut {
         // 功能键
         "missionControl": missionControl, "appExpose": appExpose,
         "spotlightSys": spotlightSys, "dictation": dictation, "doNotDisturb": doNotDisturb,
-        "showDesktop": showDesktop, "escapeKey": escapeKey,
+        "showDesktop": showDesktop, "escapeKey": escapeKey, "lookUp": lookUp,
         // 应用切换
         "switchApp": switchApp, "switchAppReverse": switchAppReverse,
         // 文档编辑
@@ -592,6 +595,7 @@ extension SystemShortcut {
 
     /// 系统快捷键ID映射表 (symbolichotkeys -> 快捷键名称)
     private static let symbolicHotkeyMapping: [Int: String] = [
+        70: "lookUp",            // Look Up & Data Detectors (默认 Command-Control-D)
         79: "moveSpaceLeft",   // Move left a space (default: Control-Left)
         80: "moveSpaceLeft",   // Move left a space with shift modifier
         81: "moveSpaceRight",  // Move right a space (default: Control-Right)

@@ -11,10 +11,16 @@ import Cocoa
 class PreferencesButtonsViewController: NSViewController {
 
     // MARK: - Recorder
-    private var recorder = KeyRecorder()
+    private let gestureRecorder = ButtonGestureRecorder()
 
     // MARK: - Data
-    private var buttonBindings: [ButtonBinding] = []
+    private var buttonRemaps: [ButtonRemap] = []
+    /// 分组平铺展示行: 每个鼠标按键一个 2 级标题行, 其后是该按键的绑定行
+    fileprivate enum ButtonDisplayRow {
+        case header(button: UInt16)
+        case remap(ButtonRemap)
+    }
+    private var buttonDisplayRows: [ButtonDisplayRow] = []
     private var currentOpenTargetPopover: OpenTargetConfigPopover?
 
     // MARK: - UI Elements
@@ -56,7 +62,7 @@ class PreferencesButtonsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         // 设置代理
-        recorder.delegate = self
+        gestureRecorder.delegate = self
         tableView.delegate = self
         tableView.dataSource = self
         // 读取设置
@@ -90,15 +96,14 @@ class PreferencesButtonsViewController: NSViewController {
 
     // 添加
     @IBAction func addItemClick(_ sender: NSButton) {
-        recorder.startRecording(from: sender)
+        gestureRecorder.startRecording(from: sender)
     }
     // 删除
     @IBAction func removeItemClick(_ sender: NSButton) {
         // 确保选择了行
-        guard tableView.selectedRow != -1 else { return }
-        // 统一通过 removeButtonBinding 处理删除逻辑
-        let binding = buttonBindings[tableView.selectedRow]
-        removeButtonBinding(id: binding.id)
+        guard let remap = remap(atDisplayRow: tableView.selectedRow) else { return }
+        // 统一通过 removeRemap 处理删除逻辑
+        removeRemap(id: remap.id)
         // 更新删除按钮状态
         updateDelButtonState()
     }
@@ -110,15 +115,38 @@ class PreferencesButtonsViewController: NSViewController {
 extension PreferencesButtonsViewController {
     // 从 Options 加载到界面
     func loadOptionsToView() {
-        buttonBindings = Options.shared.buttons.binding
+        buttonRemaps = Options.shared.buttons.remaps
+        rebuildDisplayRows()
         tableView.reloadData()
         toggleNoDataHint()
+    }
+
+    /// 按鼠标按键分组重建平铺展示行 (按键号升序, 组内保持配置顺序)
+    private func rebuildDisplayRows() {
+        var rows: [ButtonDisplayRow] = []
+        let grouped = Dictionary(grouping: buttonRemaps, by: { $0.trigger.buttonNumber })
+        for button in grouped.keys.sorted() {
+            rows.append(.header(button: button))
+            for remap in grouped[button] ?? [] {
+                rows.append(.remap(remap))
+            }
+        }
+        buttonDisplayRows = rows
+    }
+
+    /// 展示行 → 绑定行映射 (标题行返回 nil)
+    private func remap(atDisplayRow row: Int) -> ButtonRemap? {
+        guard row >= 0, row < buttonDisplayRows.count else { return nil }
+        if case .remap(let remap) = buttonDisplayRows[row] {
+            return remap
+        }
+        return nil
     }
 
     // 保存界面到 Options
     // 缓存失效与 HID++ divert 用量同步由 Options 订阅自动完成 (ButtonUtils / LogiUsageBootstrap)
     func syncViewWithOptions() {
-        Options.shared.buttons.binding = buttonBindings
+        Options.shared.buttons.remaps = buttonRemaps
     }
 
     // 更新删除按钮状态
@@ -129,137 +157,104 @@ extension PreferencesButtonsViewController {
     // 设置录制按钮回调
     private func setupRecordButtonCallback() {
         createButton.onMouseDown = { [weak self] target in
-            self?.recorder.startRecording(from: target)
+            self?.gestureRecorder.startRecording(from: target)
         }
     }
     
-    private func addRecordedEvent(_ event: InputEvent, isDuplicate: Bool) {
-        let recordedEvent = normalizedRecordedEventForButtonBinding(from: event)
-        let normalizedDuplicate = buttonBindings.contains(where: { $0.triggerEvent == recordedEvent })
+    private func addRecordedEvent(button: UInt16, modifiers: CGEventFlags, trigger: ButtonTrigger) {
+        let precondition = ButtonPrecondition(keyboardModifiers: UInt(modifiers.rawValue))
+        let normalizedDuplicate = buttonRemaps.contains {
+            $0.trigger == trigger && $0.precondition == precondition
+        }
 
         if normalizedDuplicate {
-            if let existing = buttonBindings.first(where: { $0.triggerEvent == recordedEvent }) {
+            if let existing = buttonRemaps.first(where: {
+                $0.trigger == trigger && $0.precondition == precondition
+            }) {
                 highlightExistingRow(with: existing.id)
             }
             return
         }
 
-        let binding = ButtonBinding(triggerEvent: recordedEvent, systemShortcutName: "", isEnabled: false)
-        buttonBindings.append(binding)
+        let remap = ButtonRemap(
+            trigger: trigger,
+            precondition: precondition,
+            effect: .systemShortcut(identifier: "copy"),
+            isEnabled: false
+        )
+        buttonRemaps.append(remap)
+        rebuildDisplayRows()
         tableView.reloadData()
         toggleNoDataHint()
-        notifyBLEHIDPPUnstableIfNeeded(for: recordedEvent)
+        notifyBLEHIDPPUnstableIfNeeded(for: button)
         syncViewWithOptions()
     }
 
-    private func notifyBLEHIDPPUnstableIfNeeded(for event: RecordedEvent) {
-        guard event.type == .mouse,
-              LogiCenter.shared.isLogiCode(event.code) else { return }
+    private func notifyBLEHIDPPUnstableIfNeeded(for code: UInt16) {
+        guard LogiCenter.shared.isLogiCode(code) else { return }
         let status = ButtonCapturePresentationStatus.from(
-            LogiCenter.shared.buttonCaptureDiagnosis(forMosCode: event.code)
+            LogiCenter.shared.buttonCaptureDiagnosis(forMosCode: code)
         )
         guard status == .bleHIDPPUnstable else { return }
-        LogiCenter.shared.showBLEHIDPPUnstableToast(forMosCode: event.code)
+        LogiCenter.shared.showBLEHIDPPUnstableToast(forMosCode: code)
     }
 
     // 高亮已存在的行 (用于重复录制的视觉反馈)
     private func highlightExistingRow(with id: UUID) {
-        guard let row = buttonBindings.firstIndex(where: { $0.id == id }) else { return }
+        guard let row = tableView.row(forRemap: id, in: buttonDisplayRows) else { return }
         tableView.deselectAll(nil)
         tableView.scrollRowToVisible(row)
-        if let cellView = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ButtonTableCellView {
+        if let cellView = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ButtonRemapCellView {
             cellView.highlight()
         }
     }
 
-    // 删除按钮绑定
-    func removeButtonBinding(id: UUID) {
-        buttonBindings.removeAll(where: { $0.id == id })
+    // 删除按钮重映射
+    func removeRemap(id: UUID) {
+        buttonRemaps.removeAll(where: { $0.id == id })
+        rebuildDisplayRows()
         tableView.reloadData()
         toggleNoDataHint()
         syncViewWithOptions()
     }
 
-    /// 更新按钮绑定
-    /// - Parameters:
-    ///   - id: 绑定记录的唯一标识
-    ///   - shortcut: 系统快捷键对象,nil 表示清除绑定
-    func updateButtonBinding(id: UUID, with shortcut: SystemShortcut.Shortcut?) {
-        guard let index = buttonBindings.firstIndex(where: { $0.id == id }) else { return }
-
-        let oldBinding = buttonBindings[index]
-
-        let updatedBinding: ButtonBinding
-        if let shortcut = shortcut {
-            // 绑定快捷键:直接使用快捷键的 identifier
-            updatedBinding = ButtonBinding(
-                id: oldBinding.id,
-                triggerEvent: oldBinding.triggerEvent,
-                systemShortcutName: shortcut.identifier,
-                isEnabled: true
-            )
-        } else {
-            // 清除绑定:保持触发事件,清空快捷键名称并禁用
-            updatedBinding = ButtonBinding(
-                id: oldBinding.id,
-                triggerEvent: oldBinding.triggerEvent,
-                systemShortcutName: "",
-                isEnabled: false
-            )
-        }
-
-        buttonBindings[index] = updatedBinding
-        syncViewWithOptions()
-    }
-
-    /// 更新按钮绑定 (自定义快捷键)
-    func updateButtonBinding(id: UUID, withCustomName name: String) {
-        guard let index = buttonBindings.firstIndex(where: { $0.id == id }) else { return }
-        let old = buttonBindings[index]
-        buttonBindings[index] = ButtonBinding(
+    /// 更新动作 (nil = 未绑定)
+    func updateEffect(id: UUID, effect: ButtonEffect?) {
+        guard let index = buttonRemaps.firstIndex(where: { $0.id == id }) else { return }
+        let old = buttonRemaps[index]
+        buttonRemaps[index] = ButtonRemap(
             id: old.id,
-            triggerEvent: old.triggerEvent,
-            systemShortcutName: name,
-            isEnabled: true,
+            trigger: old.trigger,
+            precondition: old.precondition,
+            effect: effect ?? old.effect,
+            isEnabled: effect != nil,
             createdAt: old.createdAt
         )
+        rebuildDisplayRows()
         syncViewWithOptions()
     }
 
-    /// 更新按钮绑定 ("打开应用" 动作)
-    func updateButtonBinding(id: UUID, withOpenTarget payload: OpenTargetPayload) {
-        guard let index = buttonBindings.firstIndex(where: { $0.id == id }) else { return }
-        let old = buttonBindings[index]
-        buttonBindings[index] = ButtonBinding(
-            id: old.id,
-            triggerEvent: old.triggerEvent,
-            openTarget: payload,
-            isEnabled: true,
-            createdAt: old.createdAt
-        )
-        syncViewWithOptions()
-        tableView.reloadData()
-    }
-
-    func replaceButtonBinding(_ binding: ButtonBinding) {
-        guard buttonBindings.contains(where: { $0.id == binding.id }) else { return }
-        buttonBindings = ButtonBindingReplacement.replacing(binding, in: buttonBindings)
-        tableView.reloadData()
-        toggleNoDataHint()
-        syncViewWithOptions()
+    /// 更新动作 (自定义键)
+    func updateCustomKey(id: UUID, code: UInt16, modifiers: UInt64) {
+        updateEffect(id: id, effect: .customKey(code: code, modifiers: modifiers))
     }
 
     private func presentOpenTargetPopover(forBindingID id: UUID) {
-        guard let index = buttonBindings.firstIndex(where: { $0.id == id }) else { return }
-        guard let row = tableView.row(forBinding: id, in: buttonBindings) else { return }
-        guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ButtonTableCellView else { return }
+        guard let index = buttonRemaps.firstIndex(where: { $0.id == id }) else { return }
+        guard let row = tableView.row(forRemap: id, in: buttonDisplayRows) else { return }
+        guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ButtonRemapCellView else { return }
 
-        let existing = buttonBindings[index].openTarget
+        let existing: OpenTargetPayload?
+        if case .openTarget(let payload) = buttonRemaps[index].effect {
+            existing = payload
+        } else {
+            existing = nil
+        }
 
         let popover = OpenTargetConfigPopover()
         currentOpenTargetPopover = popover
         popover.onCommit = { [weak self] payload in
-            self?.updateButtonBinding(id: id, withOpenTarget: payload)
+            self?.updateEffect(id: id, effect: .openTarget(payload: payload))
             self?.currentOpenTargetPopover = nil
         }
         popover.onCancel = { [weak self] in
@@ -275,7 +270,7 @@ extension PreferencesButtonsViewController {
 extension PreferencesButtonsViewController: NSTableViewDelegate, NSTableViewDataSource {
     // 无数据
     func toggleNoDataHint() {
-        let hasData = buttonBindings.count != 0
+        let hasData = buttonRemaps.count != 0
         updateViewVisibility(view: createButton, visible: !hasData)
         updateViewVisibility(view: tableEmpty, visible: !hasData)
         updateViewVisibility(view: tableHead, visible: hasData)
@@ -290,26 +285,24 @@ extension PreferencesButtonsViewController: NSTableViewDelegate, NSTableViewData
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let tableColumnIdentifier = tableColumn?.identifier else { return nil }
 
-        // 创建 Cell
-        if let cell = tableView.makeView(withIdentifier: tableColumnIdentifier, owner: self) as? ButtonTableCellView {
-            let binding = buttonBindings[row]
+        // 分组标题行 (2 级次要 title)
+        if case .header(let button) = buttonDisplayRows[row] {
+            return makeGroupHeaderView(button: button)
+        }
 
+        // 绑定行
+        guard case .remap(let remap) = buttonDisplayRows[row] else { return nil }
+        if let cell = tableView.makeView(withIdentifier: tableColumnIdentifier, owner: self) as? ButtonRemapCellView {
             cell.configure(
-                with: binding,
-                onShortcutSelected: { [weak self] shortcut in
-                    self?.updateButtonBinding(id: binding.id, with: shortcut)
+                with: remap,
+                onEffectChanged: { [weak self] effect in
+                    self?.updateEffect(id: remap.id, effect: effect)
                 },
-                onCustomShortcutRecorded: { [weak self] customName in
-                    self?.updateButtonBinding(id: binding.id, withCustomName: customName)
+                onCustomKeyRecorded: { [weak self] code, modifiers in
+                    self?.updateCustomKey(id: remap.id, code: code, modifiers: modifiers)
                 },
                 onOpenTargetSelectionRequested: { [weak self] in
-                    self?.presentOpenTargetPopover(forBindingID: binding.id)
-                },
-                onDeleteRequested: { [weak self] in
-                    self?.removeButtonBinding(id: binding.id)
-                },
-                onBindingUpdated: { [weak self] updated in
-                    self?.replaceButtonBinding(updated)
+                    self?.presentOpenTargetPopover(forBindingID: remap.id)
                 }
             )
             return cell
@@ -317,15 +310,53 @@ extension PreferencesButtonsViewController: NSTableViewDelegate, NSTableViewData
 
         return nil
     }
+
+    /// 分组标题: 次要样式 (小字号 + 次级颜色), 展示按键名称与编号
+    private func makeGroupHeaderView(button: UInt16) -> NSView? {
+        let identifier = NSUserInterfaceItemIdentifier("ButtonGroupHeaderCell")
+        let cell: NSTableCellView
+        if let reused = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView {
+            cell = reused
+        } else {
+            cell = NSTableCellView()
+            cell.identifier = identifier
+            let label = NSTextField(labelWithString: "")
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+            label.textColor = .secondaryLabelColor
+            cell.addSubview(label)
+            cell.textField = label
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+            ])
+        }
+        let name = KeyCode.mouseMap[button] ?? "Mouse(\(button))"
+        let title = name.contains("\(button)") ? name : "\(name) (\(button))"
+        cell.textField?.stringValue = title
+        return cell
+    }
     
     // 行高
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        if case .header = buttonDisplayRows[row] {
+            return 26
+        }
         return 44
     }
     
     // 行数
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return buttonBindings.count
+        return buttonDisplayRows.count
+    }
+
+    // 标题行不可选中
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        if case .header = buttonDisplayRows[row] {
+            return false
+        }
+        return true
     }
 
     // 选择变化
@@ -335,8 +366,17 @@ extension PreferencesButtonsViewController: NSTableViewDelegate, NSTableViewData
 
     // Type Selection 支持
     func tableView(_ tableView: NSTableView, typeSelectStringFor tableColumn: NSTableColumn?, row: Int) -> String? {
-        guard row < buttonBindings.count else { return nil }
-        let components = buttonBindings[row].triggerEvent.displayComponents
+        guard row < buttonDisplayRows.count,
+              case .remap(let remap) = buttonDisplayRows[row] else { return nil }
+        let event = InputEvent(
+            type: .mouse,
+            code: remap.trigger.buttonNumber,
+            modifiers: CGEventFlags(rawValue: UInt64(remap.precondition.keyboardModifiers)),
+            phase: .down,
+            source: .hidPP,
+            device: nil
+        )
+        let components = event.displayComponents
         // 去掉第一项（修饰键），只保留实际按键用于匹配
         let keyOnly = components.count > 1 ? Array(components.dropFirst()) : components
         return keyOnly.joined(separator: " ")
@@ -531,27 +571,26 @@ extension PreferencesButtonsViewController {
 }
 
 private extension NSTableView {
-    func row(forBinding id: UUID, in bindings: [ButtonBinding]) -> Int? {
-        return bindings.firstIndex(where: { $0.id == id })
+    func row(forRemap id: UUID, in displayRows: [PreferencesButtonsViewController.ButtonDisplayRow]) -> Int? {
+        return displayRows.firstIndex { row in
+            if case .remap(let remap) = row {
+                return remap.id == id
+            }
+            return false
+        }
     }
 }
 
-// MARK: - EventRecorderDelegate
-extension PreferencesButtonsViewController: KeyRecorderDelegate {
-    func validateRecordedEvent(_ recorder: KeyRecorder, event: InputEvent) -> Bool {
-        let recordedEvent = normalizedRecordedEventForButtonBinding(from: event)
-        return !buttonBindings.contains(where: { $0.triggerEvent == recordedEvent })
+// MARK: - ButtonGestureRecorderDelegate
+extension PreferencesButtonsViewController: ButtonGestureRecorderDelegate {
+    func buttonGestureRecorder(
+        _ recorder: ButtonGestureRecorder,
+        didRecord button: UInt16,
+        modifiers: CGEventFlags,
+        trigger: ButtonTrigger
+    ) {
+        addRecordedEvent(button: button, modifiers: modifiers, trigger: trigger)
     }
 
-    func onEventRecorded(_ recorder: KeyRecorder, didRecordEvent event: InputEvent, isDuplicate: Bool) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + KeyRecorder.recordingFeedbackDelay(isDuplicate: isDuplicate)) { [weak self] in
-            self?.addRecordedEvent(event, isDuplicate: isDuplicate)
-        }
-    }
-
-    private func normalizedRecordedEventForButtonBinding(from event: InputEvent) -> RecordedEvent {
-        let recordedEvent = RecordedEvent(from: event)
-        let diagnosis = LogiCenter.shared.buttonCaptureDiagnosis(forMosCode: event.code)
-        return recordedEvent.normalizedForButtonBinding(diagnosis: diagnosis)
-    }
+    func buttonGestureRecorderDidCancel(_ recorder: ButtonGestureRecorder) {}
 }

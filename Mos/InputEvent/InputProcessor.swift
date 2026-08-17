@@ -21,9 +21,15 @@ enum InputResult: Equatable {
 /// 使用 activeBindings 表跟踪按下中的绑定, 确保 Up 事件正确配对
 class InputProcessor: ModifierFlagsProviding {
     static let shared = InputProcessor()
-    init() { NSLog("Module initialized: InputProcessor") }
+    init() {
+        NSLog("Module initialized: InputProcessor")
+        clickCycle.delegate = self
+    }
 
     private static let mosScrollTapReplayMovementTolerance: CGFloat = 8.0
+
+    /// 新引擎点击周期状态机 (按钮重映射)
+    let clickCycle = ClickCycle()
 
     // MARK: - Active Bindings Table
     /// 跟踪当前按下中的 stateful 动作, 用于 Up 事件配对
@@ -51,6 +57,8 @@ class InputProcessor: ModifierFlagsProviding {
     /// 清空所有活跃绑定和虚拟修饰键状态 (ButtonCore disable 时调用, 防止状态残留)
     func clearActiveBindings() {
         assertMainThread()
+        // 新引擎 stateful 会话先释放 (经 delegate 执行 up)
+        clickCycle.killAll()
         for session in activeBindings.values where session.action.executionMode == .stateful {
             ShortcutExecutor.shared.execute(
                 action: session.action,
@@ -77,6 +85,11 @@ class InputProcessor: ModifierFlagsProviding {
                   KeyCode.modifierKeys.contains(code) else { continue }
             flags |= modifiers | KeyCode.getKeyMask(code).rawValue
         }
+        for effect in clickCycle.activeStatefulEffects {
+            guard case let .customKey(code, modifiers) = effect,
+                  KeyCode.modifierKeys.contains(code) else { continue }
+            flags |= modifiers | KeyCode.getKeyMask(code).rawValue
+        }
         activeModifierFlags = flags
         MouseInteractionSessionController.shared.refreshMotionTapState()
     }
@@ -92,6 +105,32 @@ class InputProcessor: ModifierFlagsProviding {
     /// - Returns: .consumed 表示事件已处理, .passthrough 表示未匹配
     func process(_ event: InputEvent) -> InputResult {
         assertMainThread()
+        // 新引擎启用后, 鼠标按钮走 ClickCycle; 键盘事件不再作为绑定触发
+        if ButtonUtils.shared.hasButtonRemaps {
+            return processButtonRemapEngine(event)
+        }
+        return processLegacy(event)
+    }
+
+    /// 新引擎: 鼠标按钮 → ClickCycle, 键盘事件仅 passthrough (虚拟修饰键注入由 ButtonCore 完成)
+    private func processButtonRemapEngine(_ event: InputEvent) -> InputResult {
+        guard event.type == .mouse else {
+            return .passthrough
+        }
+        switch event.phase {
+        case .down:
+            return clickCycle.handleDown(button: event.code, modifiers: event.modifiers) == .consumed
+                ? .consumed
+                : .passthrough
+        case .up:
+            return clickCycle.handleUp(button: event.code, modifiers: event.modifiers) == .consumed
+                ? .consumed
+                : .passthrough
+        }
+    }
+
+    /// 旧引擎: 键盘/鼠标绑定 (新引擎未启用时的过渡路径)
+    private func processLegacy(_ event: InputEvent) -> InputResult {
         if event.phase == .up {
             // Up 事件: 按 (type, code) 查表, 忽略 modifiers (用户可能已松开修饰键)
             if releaseActiveBinding(for: event) {
@@ -237,5 +276,59 @@ class InputProcessor: ModifierFlagsProviding {
             return true
         }
         return (NSEvent.pressedMouseButtons & (1 << Int(buttonNumber))) != 0
+    }
+}
+
+// MARK: - ClickCycleDelegate (新引擎)
+extension InputProcessor: ClickCycleDelegate {
+
+    func clickCycle(_ cycle: ClickCycle, maxLevelForButton button: UInt16, modifiers: CGEventFlags) -> Int {
+        return ButtonUtils.shared.maxLevel(for: button, modifiers: modifiers)
+    }
+
+    func clickCycle(_ cycle: ClickCycle, remapForButton button: UInt16, level: Int, duration: ButtonTriggerDuration, modifiers: CGEventFlags) -> ButtonRemap? {
+        return ButtonUtils.shared.remap(
+            for: button,
+            level: level,
+            duration: duration,
+            modifiers: modifiers
+        )
+    }
+
+    func clickCycle(_ cycle: ClickCycle, isStatefulEffect effect: ButtonEffect) -> Bool {
+        return ShortcutExecutor.shared.resolve(effect: effect)?.executionMode == .stateful
+    }
+
+    func clickCycle(_ cycle: ClickCycle, didCommit remap: ButtonRemap, phase: ClickCyclePhase, button: UInt16, modifiers: CGEventFlags) -> UUID? {
+        guard let action = ShortcutExecutor.shared.resolve(effect: remap.effect) else { return nil }
+        let result = ShortcutExecutor.shared.execute(action: action, phase: .down, inputModifiers: modifiers)
+        recomputeActiveModifierFlags()
+        return result.mouseSessionID
+    }
+
+    func clickCycle(_ cycle: ClickCycle, didRelease remap: ButtonRemap, button: UInt16, modifiers: CGEventFlags, sessionID: UUID?) {
+        guard let action = ShortcutExecutor.shared.resolve(effect: remap.effect) else { return }
+        ShortcutExecutor.shared.execute(action: action, phase: .up, mouseSessionID: sessionID, inputModifiers: modifiers)
+        recomputeActiveModifierFlags()
+    }
+
+    func clickCycle(_ cycle: ClickCycle, isGestureUsedForButton button: UInt16) -> Bool {
+        // 拖拽已启动 (位移超过阈值) 或本次按住期间发生过滚动 → 手势视为已使用
+        if DragSessionManager.shared.hasStartedDrag {
+            return true
+        }
+        if ScrollCore.shared.hasReceivedScrollInput {
+            return true
+        }
+        return false
+    }
+}
+
+// MARK: - 测试钩子
+extension InputProcessor {
+    /// 调整 ClickCycle 延时 (仅测试使用; 生产代码保持默认 0.25/0.26)
+    func setClickCycleTestingDelays(hold: TimeInterval = 0.25, expiry: TimeInterval = 0.26) {
+        clickCycle.holdDelay = hold
+        clickCycle.levelExpiryDelay = expiry
     }
 }

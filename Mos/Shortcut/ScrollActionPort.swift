@@ -13,3 +13,9 @@ import Foundation
 protocol ScrollActionPort: AnyObject {
     func handleMosScrollAction(role: ScrollRole, isDown: Bool)
 }
+
+/// 滚动修饰端口: ShortcutExecutor 通过此协议开关"按住按钮 → 修改滚动"状态,
+/// 由 ScrollCore 实现并在滚动事件回调中读取应用。
+protocol ScrollModificationPort: AnyObject {
+    func setScrollModification(_ kind: ScrollModificationKind, active: Bool)
+}

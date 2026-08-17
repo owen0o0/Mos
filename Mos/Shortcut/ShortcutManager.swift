@@ -64,6 +64,13 @@ class ShortcutManager {
         // 添加第二条分割线 (分隔"未绑定"操作和分类菜单)
         menu.addItem(NSMenuItem.separator())
 
+        // 追加分类与自定义入口 (供新按钮效果菜单复用)
+        appendShortcutMenuItems(into: menu, target: target, action: action, showLogiActions: showLogiActions)
+    }
+
+    /// 追加系统快捷键分类、鼠标按键、Mos、Logi 与"打开应用/自定义"入口
+    /// 不含占位符与"未绑定"项, 供 ButtonEffectMenuBuilder 复用
+    static func appendShortcutMenuItems(into menu: NSMenu, target: AnyObject, action: Selector, showLogiActions: Bool = false) {
         var totalShortcuts = 0
 
         // 按分类构建分级菜单（顺序由 shortcutsByCategory 数组定义）

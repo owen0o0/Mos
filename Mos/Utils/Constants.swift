@@ -123,6 +123,29 @@ class OPTIONS_BUTTONS_DEFAULT: Codable {
         // 容器被全局/per-app 复用, 由 Options 按引用身份路由归属组
         didSet { Options.shared.markChanged(buttonsContainer: self) }
     }
+    // 按钮重映射 (新引擎; 旧 binding 数据不再读取为触发来源)
+    var remaps: [ButtonRemap] = [] {
+        didSet { Options.shared.markChanged(buttonsContainer: self) }
+    }
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case binding
+        case remaps
+    }
+
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        binding = try container.decodeIfPresent([ButtonBinding].self, forKey: .binding) ?? []
+        remaps = try container.decodeIfPresent([ButtonRemap].self, forKey: .remaps) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(binding, forKey: .binding)
+        try container.encode(remaps, forKey: .remaps)
+    }
 }
 
 // 滚动

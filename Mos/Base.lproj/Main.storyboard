@@ -284,7 +284,7 @@
                                                     </textFieldCell>
                                                     <tableColumnResizingMask key="resizingMask" resizeWithTable="YES"/>
                                                     <prototypeCellViews>
-                                                        <tableCellView id="zV9-2l-l6k" customClass="ButtonTableCellView" customModule="Mos" customModuleProvider="target">
+                                                        <tableCellView id="zV9-2l-l6k" customClass="ButtonRemapCellView" customModule="Mos" customModuleProvider="target">
                                                             <rect key="frame" x="18" y="0.0" width="413" height="52"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>

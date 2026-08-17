@@ -8,7 +8,7 @@
 
 import Cocoa
 
-class ScrollCore: ScrollActionPort {
+class ScrollCore: ScrollActionPort, ScrollModificationPort {
 
     // 单例
     static let shared = ScrollCore()
@@ -33,6 +33,41 @@ class ScrollCore: ScrollActionPort {
     // 例外应用数据
     var application: Application?
     var currentApplication: Application? // 用于区分按下热键及抬起时的作用目标
+    // 滚动修饰 (按住按钮期间生效)
+    private(set) var activeScrollModifications: Set<ScrollModificationKind> = []
+    /// 滚动手势相位控制:
+    /// 每个滚轮 tick 重启一个固定时长的动画 (zoom 250ms 缓出曲线 / pinch 180ms 线性),
+    /// 动画自然完成发 ended; 方向改变取消动画并丢弃反向 tick
+    private var scrollGestureActive = false
+    /// 当前手势对应的输出类型
+    private var scrollGestureKind: ScrollModificationKind?
+    /// 60Hz 平滑输出定时器
+    private var scrollGestureOutputTimer: Timer?
+    /// 当前动画仍未交付的累计值 (输出单位)
+    private var gesturePending: Double = 0
+    /// 当前动画窗口内已交付值 (每个 tick 重启动画时清零)
+    private var gestureDelivered: Double = 0
+    /// 当前动画窗口总值 (pending 快照, 每个 tick 重启时更新)
+    private var gestureAnimationTotal: Double = 0
+    /// 当前动画窗口起点 (每个 tick 重启时更新)
+    private var gestureAnimationStartTime: CFTimeInterval = 0
+    /// 当前手势累计 delta (用于方向改变判定)
+    private var gestureAccumulatedDelta: Double = 0
+    /// 动画时长 (zoom 250ms / pinch 180ms)
+    var scrollGestureZoomDuration: TimeInterval = 0.25
+    var scrollGesturePinchDuration: TimeInterval = 0.18
+    /// 平滑输出间隔 (60Hz)
+    var scrollGestureOutputInterval: TimeInterval = 1.0 / 60.0
+    /// 加速曲线参数 (中等速度档): 把滚动速度(ticks/s)映射为每格像素
+    /// 输出灵敏度不依赖鼠标原始 delta 大小
+    let scrollGestureAccelerationXMin = 1.0 / 0.16      // 6.25 ticks/s (consecutiveScrollTickIntervalMax)
+    let scrollGestureAccelerationXMax = 1.0 / 0.015     // 66.67 ticks/s (AccelerationEnd)
+    let scrollGestureAccelerationYMin = 60.0
+    let scrollGestureAccelerationYMax = 120.0
+    /// 上次手势输入时间戳 (计算 tick 间隔 → 滚动速度)
+    private var lastScrollGestureInputTime: CFTimeInterval = 0
+    /// 本次按住期间是否发生过滚动输入 (用于单击/手势干涉判定)
+    private(set) var hasReceivedScrollInput = false
     // 拦截层
     var scrollEventInterceptor: Interceptor?
     var hotkeyEventInterceptor: Interceptor?
@@ -66,6 +101,14 @@ class ScrollCore: ScrollActionPort {
             ScrollPoster.shared.recordSkippedSyntheticEvent()
 #endif
             return Unmanaged.passUnretained(event)
+        }
+        // 跳过 Mos 合成的其它滚动事件 (如双指滑动投递的滚轮事件), 不进修饰/平滑管线
+        if event.getIntegerValueField(.eventSourceUserData) == MosEventMarker.syntheticCustom {
+            return Unmanaged.passUnretained(event)
+        }
+        // 滚动修饰 (返回 true = 事件已消费, 不再进入平滑管线)
+        if ScrollCore.shared.applyActiveScrollModifications(to: event) {
+            return nil
         }
         // 滚动事件
         let scrollEvent = ScrollEvent(with: event)
@@ -193,7 +236,296 @@ class ScrollCore: ScrollActionPort {
             return Unmanaged.passUnretained(event)
         }
     }
-    
+
+    // MARK: - 滚动修饰
+
+    func setScrollModification(_ kind: ScrollModificationKind, active: Bool) {
+        assertMainThread()
+        if active {
+            activeScrollModifications.insert(kind)
+        } else {
+            activeScrollModifications.remove(kind)
+            if activeScrollModifications.isEmpty {
+                hasReceivedScrollInput = false
+            }
+            // 手势进行中若对应修饰被关闭 (松手), 立即结束手势
+            if scrollGestureActive, scrollGestureKind == kind {
+                finishScrollGesture()
+            }
+        }
+    }
+
+    /// 在滚动事件进入平滑管线前应用按钮滚动修饰 (直接改 CGEvent 轴数据与 flags)
+    /// 返回 true 表示事件已被消费 (如四指捏合), 调用方应直接返回 nil
+    @discardableResult
+    func applyActiveScrollModifications(to event: CGEvent) -> Bool {
+        guard !activeScrollModifications.isEmpty else { return false }
+        // Mos 自身合成的滚动事件 (如双指滑动) 不应用滚动修饰
+        if event.getIntegerValueField(.eventSourceUserData) == MosEventMarker.syntheticCustom {
+            return false
+        }
+        hasReceivedScrollInput = true
+
+        if activeScrollModifications.contains(.fourFingerPinch) {
+            handleFourFingerPinch(on: event)
+            return true
+        }
+        if activeScrollModifications.contains(.zoom) {
+            handleZoom(on: event)
+            return true
+        }
+
+        return false
+    }
+
+    /// 四指捏合: 滚轮 delta 转为 dockSwipe pinch (显示桌面 / 启动台)
+    private func handleFourFingerPinch(on event: CGEvent) {
+        let dx = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+        let dy = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+        // 方向反转: 原生为 -(dx + dy)/600, 按用户要求反向 → +(dx + dy)/600
+        handleScrollGestureInput(kind: .fourFingerPinch, orientedDelta: dx + dy, divisor: 600.0)
+    }
+
+    /// 双指捏合缩放: 滚轮 delta 转为 magnification 事件
+    private func handleZoom(on event: CGEvent) {
+        let dx = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+        let dy = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+        // 方向反转: 原生为 (dx + dy)/800, 按用户要求反向 → -(dx + dy)/800
+        let orientedDelta = -(dx + dy)
+
+        var firstFrameExtra = 0.0
+        var firstFramePhase = GestureScrollPhase.began
+        // Chromium 预热: 首帧先发小 began (应用忽略), changed 帧再叠加 380/800 或 250/800
+        if !scrollGestureActive, orientedDelta != 0, isChromiumBrowserUnderPointer(event: event) {
+            firstFrameExtra = orientedDelta > 0 ? 380.0 / 800.0 : -250.0 / 800.0
+            firstFramePhase = .changed
+        }
+        handleScrollGestureInput(kind: .zoom, orientedDelta: orientedDelta, divisor: 800.0, firstFrameExtra: firstFrameExtra, firstFramePhase: firstFramePhase)
+    }
+
+    /// 加速曲线: 按滚动速度(tick/s)返回本格应输出的像素数
+    /// 曲线为 BezierCappedAccelerationCurve (curvature 0.25) 的线性近似,
+    /// x∈[6.25, 66.67] ticks/s, y∈[60, 120] px, 输出与鼠标原始 delta 大小无关
+    private func scrollGesturePixelsPerTick(for rawDelta: Double) -> Double {
+        guard rawDelta != 0 else { return 0 }
+
+        let now = CFAbsoluteTimeGetCurrent()
+        let interval: CFTimeInterval
+        if scrollGestureActive && lastScrollGestureInputTime > 0 {
+            interval = min(max(now - lastScrollGestureInputTime, 0.001), 0.16)
+        } else {
+            interval = 0.16
+        }
+        lastScrollGestureInputTime = now
+
+        let speed = 1.0 / interval
+        let clamped = min(max(speed, scrollGestureAccelerationXMin), scrollGestureAccelerationXMax)
+        let progress = (clamped - scrollGestureAccelerationXMin) / (scrollGestureAccelerationXMax - scrollGestureAccelerationXMin)
+        let pixels = scrollGestureAccelerationYMin + (scrollGestureAccelerationYMax - scrollGestureAccelerationYMin) * progress
+
+        return rawDelta > 0 ? pixels : -pixels
+    }
+
+    /// Chromium 系浏览器 (Chrome/Chromium/Arc/Opera/Edge/Vivaldi/Brave) 对缩放 delta 不敏感
+    private func isChromiumBrowserUnderPointer(event: CGEvent) -> Bool {
+        guard let bundleID = ScrollUtils.shared.getRunningApplication(from: event)?.bundleIdentifier else {
+            return false
+        }
+        let chromiumBundlePrefixes = [
+            "com.google.Chrome",
+            "org.chromium.Chromium",
+            "company.thebrowser.Browser",
+            "com.operasoftware.Opera",
+            "com.microsoft.edgemac",
+            "com.vivaldi.Vivaldi",
+            "com.brave.Browser",
+        ]
+        return chromiumBundlePrefixes.contains { bundleID.hasPrefix($0) }
+    }
+
+    // MARK: - 滚动手势相位管理
+
+    /// 处理一次手势输入:
+    /// 每个 tick 经加速曲线算出像素并追加到动画; 方向改变取消动画并丢弃反向 tick
+    private func handleScrollGestureInput(
+        kind: ScrollModificationKind,
+        orientedDelta: Double,
+        divisor: Double,
+        firstFrameExtra: Double = 0,
+        firstFramePhase: GestureScrollPhase = .began
+    ) {
+        let inputDelta = scrollGesturePixelsPerTick(for: orientedDelta) / divisor
+        guard inputDelta != 0 else { return }
+
+        // 方向改变 → 取消当前动画 (发 ended), 丢弃反向 tick (需用户再次滚动)
+        if scrollGestureActive,
+           signOf(inputDelta) != 0,
+           signOf(gestureAccumulatedDelta) != 0,
+           signOf(inputDelta) != signOf(gestureAccumulatedDelta) {
+            finishScrollGesture(postEnded: true)
+            return
+        }
+
+        let isBeginning = !scrollGestureActive
+        if isBeginning {
+            scrollGestureActive = true
+            scrollGestureKind = kind
+            gestureAccumulatedDelta = 0
+            gesturePending = 0
+            gestureDelivered = 0
+        }
+
+        // 每个 tick 重启动画, total = 未交付 + 新 tick
+        gesturePending += inputDelta
+        gestureAccumulatedDelta += inputDelta
+        gestureAnimationTotal = gesturePending
+        gestureDelivered = 0
+        gestureAnimationStartTime = CFAbsoluteTimeGetCurrent()
+
+        startOutputTimer()
+
+        // 首帧同步输出 (首帧 = 一个刷新周期, 相位 began)
+        if isBeginning {
+            outputFirstFrame(kind: kind, phase: firstFramePhase, extraDelta: firstFrameExtra)
+        }
+    }
+
+    private func startOutputTimer() {
+        scrollGestureOutputTimer?.invalidate()
+        let timer = Timer(timeInterval: scrollGestureOutputInterval, repeats: true) { [weak self] _ in
+            self?.outputTimerTick()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        scrollGestureOutputTimer = timer
+    }
+
+    private func outputTimerTick() {
+        guard scrollGestureActive, let kind = scrollGestureKind else { return }
+        let now = CFAbsoluteTimeGetCurrent()
+        let duration = gestureAnimationDuration(for: kind)
+        let progress = min(max((now - gestureAnimationStartTime) / duration, 0), 1)
+        let target = gestureAnimationCurve(kind, progress) * gestureAnimationTotal
+        let frame = target - gestureDelivered
+        gestureDelivered = target
+        gesturePending -= frame
+
+        let isLast = progress >= 1
+        if frame != 0 {
+            postGestureFrame(kind: kind, delta: frame, phase: isLast ? .ended : .changed)
+        }
+        if isLast {
+            if frame == 0 {
+                // 动画结束帧必然发 end 事件
+                switch kind {
+                case .fourFingerPinch:
+                    TouchSimulator.postDockSwipe(delta: 0, axis: .pinch, phase: .ended, inverted: true)
+                case .zoom:
+                    TouchSimulator.postMagnification(magnification: 0, phase: .ended)
+                }
+            }
+            resetScrollGesture()
+        }
+    }
+
+    /// 首帧同步输出: 按一个刷新周期 (1/60s) 的曲线进度输出;
+    /// Chromium 预热时先发 began (首帧值, 应用忽略), 再发 changed (首帧值 + 预热量)
+    private func outputFirstFrame(kind: ScrollModificationKind, phase: GestureScrollPhase, extraDelta: Double) {
+        let duration = gestureAnimationDuration(for: kind)
+        let progress = min((1.0 / 60.0) / duration, 1)
+        let target = gestureAnimationCurve(kind, progress) * gestureAnimationTotal
+        let frame = target - gestureDelivered
+        gestureDelivered = target
+        gesturePending -= frame
+        if extraDelta != 0 {
+            postGestureFrame(kind: kind, delta: frame, phase: .began)
+            postGestureFrame(kind: kind, delta: frame + extraDelta, phase: .changed)
+        } else {
+            postGestureFrame(kind: kind, delta: frame, phase: phase)
+        }
+    }
+
+    private func postGestureFrame(kind: ScrollModificationKind, delta: Double, phase: GestureScrollPhase) {
+        guard delta != 0 else { return }
+        switch kind {
+        case .fourFingerPinch:
+            let dockPhase = DockSwipePhase(rawValue: phase.rawValue) ?? .changed
+            TouchSimulator.postDockSwipe(delta: delta, axis: .pinch, phase: dockPhase, inverted: true)
+        case .zoom:
+            TouchSimulator.postMagnification(magnification: delta, phase: phase)
+        }
+    }
+
+    /// 动画时长: zoom 250ms / pinch 180ms
+    private func gestureAnimationDuration(for kind: ScrollModificationKind) -> TimeInterval {
+        switch kind {
+        case .zoom: return scrollGestureZoomDuration
+        case .fourFingerPinch: return scrollGesturePinchDuration
+        }
+    }
+
+    /// 动画曲线 (归一化进度 x ∈ [0,1] → 已交付比例):
+    /// - zoom: 贝塞尔 [(0,0),(0,0),(0.5,1),(1,1)], 参数 t 满足 x=1.5t²-0.5t³, y=3t²-2t³
+    /// - pinch: 线性 y=x
+    private func gestureAnimationCurve(_ kind: ScrollModificationKind, _ progress: Double) -> Double {
+        switch kind {
+        case .zoom: return zoomTouchDriverCurveY(atX: progress)
+        case .fourFingerPinch: return progress
+        }
+    }
+
+    /// 缓出曲线: Newton 求 x(t)=1.5t²-0.5t³ 的参数 t, 返回 y=3t²-2t³
+    private func zoomTouchDriverCurveY(atX x: Double) -> Double {
+        if x <= 0 { return 0 }
+        if x >= 1 { return 1 }
+        var t = x
+        for _ in 0..<5 {
+            let f = 1.5 * t * t - 0.5 * t * t * t - x
+            let fp = 3.0 * t - 1.5 * t * t
+            guard fp > 0.0001 else { break }
+            t -= f / fp
+        }
+        return 3.0 * t * t - 2.0 * t * t * t
+    }
+
+    /// 结束手势: 发 ended(0) (取消/松手) 并复位
+    private func finishScrollGesture(postEnded: Bool = true) {
+        scrollGestureOutputTimer?.invalidate()
+        scrollGestureOutputTimer = nil
+        guard scrollGestureActive, let kind = scrollGestureKind else { return }
+        if postEnded {
+            switch kind {
+            case .fourFingerPinch:
+                TouchSimulator.postDockSwipe(delta: 0, axis: .pinch, phase: .ended, inverted: true)
+            case .zoom:
+                TouchSimulator.postMagnification(magnification: 0, phase: .ended)
+            }
+        }
+        resetScrollGesture()
+    }
+
+    private func resetScrollGesture() {
+        scrollGestureOutputTimer?.invalidate()
+        scrollGestureOutputTimer = nil
+        scrollGestureActive = false
+        scrollGestureKind = nil
+        gestureAccumulatedDelta = 0
+        gesturePending = 0
+        gestureDelivered = 0
+        gestureAnimationTotal = 0
+        gestureAnimationStartTime = 0
+    }
+
+    /// 测试清理: 取消未决定时器且不投递事件
+    func cancelScrollGestureForTesting() {
+        resetScrollGesture()
+    }
+
+    private func signOf(_ value: Double) -> Int {
+        if value > 0 { return 1 }
+        if value < 0 { return -1 }
+        return 0
+    }
+
     // MARK: - HID++ 滚动热键处理
 
     /// 跟踪当前由哪个 HID++ 按键码激活了热键状态

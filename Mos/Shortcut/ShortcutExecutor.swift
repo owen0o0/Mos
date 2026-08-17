@@ -88,12 +88,19 @@ enum ResolvedAction {
     case systemShortcut(identifier: String)
     case logiAction(identifier: String)
     case openTarget(payload: OpenTargetPayload)
+    case systemDefinedEvent(type: UInt32, flags: UInt64)
+    case mouseButtonClicks(buttonNumber: UInt16, count: Int)
+    case smartZoom
+    case lookUp
+    case navigationSwipe(direction: NavigationSwipeDirection)
+    case drag(mode: DragMode)
+    case scrollModification(kind: ScrollModificationKind)
 
     var executionMode: ActionExecutionMode {
         switch self {
-        case .customKey, .customMouseButton, .mouseButton, .mosScroll:
+        case .customKey, .customMouseButton, .mouseButton, .mosScroll, .drag, .scrollModification:
             return .stateful
-        case .logiAction, .openTarget:
+        case .logiAction, .openTarget, .systemDefinedEvent, .mouseButtonClicks, .smartZoom, .lookUp, .navigationSwipe:
             return .trigger
         case .systemShortcut(let identifier):
             return SystemShortcut.getShortcut(named: identifier)?.executionMode ?? .trigger
@@ -128,7 +135,14 @@ class ShortcutExecutor {
     /// 修饰键 provider (启动期注入 InputProcessor.shared)。weak: provider 为永生单例。
     weak var modifierFlagsProvider: ModifierFlagsProviding?
 
+    /// 滚动修饰端口 (启动期注入 ScrollCore.shared)
+    weak var scrollModificationPort: ScrollModificationPort?
+
+    /// 滚动修饰引用计数 (多按钮同时按住同一修饰时, 全部松开才关闭)
+    private var scrollModificationCounts: [ScrollModificationKind: Int] = [:]
+
     private var testingMouseEventObserver: ((CGEvent) -> Void)?
+    private var testingKeyEventObserver: ((CGEvent) -> Void)?
 
     /// 快速识别 Mos Scroll 三个 stateful 动作, 供事件热路径避免完整 action 解析。
     static func isMosScrollActionIdentifier(_ shortcutName: String) -> Bool {
@@ -151,7 +165,7 @@ class ShortcutExecutor {
         // 发送按键按下事件
         if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true) {
             keyDown.flags = CGEventFlags(rawValue: flags)
-            keyDown.post(tap: .cghidEventTap)
+            notifyOrPostKeyEvent(keyDown)
         }
 
         // 发送按键抬起事件
@@ -159,8 +173,16 @@ class ShortcutExecutor {
             if preserveFlagsOnKeyUp {
                 keyUp.flags = CGEventFlags(rawValue: flags)
             }
-            keyUp.post(tap: .cghidEventTap)
+            notifyOrPostKeyEvent(keyUp)
         }
+    }
+
+    func setTestingKeyEventObserver(_ observer: @escaping (CGEvent) -> Void = { _ in }) {
+        testingKeyEventObserver = observer
+    }
+
+    func clearTestingKeyEventObserver() {
+        testingKeyEventObserver = nil
     }
 
     /// 执行系统快捷键 (从SystemShortcut.Shortcut对象)
@@ -219,10 +241,102 @@ class ShortcutExecutor {
             guard phase == .down else { return .none }
             executeOpenTarget(payload)
             return .none
+        case .systemDefinedEvent(let type, let flags):
+            guard phase == .down else { return .none }
+            postSystemDefinedEvent(type: type, flags: flags)
+            return .none
+        case .mouseButtonClicks(let buttonNumber, let count):
+            guard phase == .down else { return .none }
+            postMouseButtonClicks(buttonNumber: buttonNumber, count: count)
+            return .none
+        case .smartZoom:
+            guard phase == .down else { return .none }
+            TouchSimulator.postSmartZoomEvent()
+            return .none
+        case .lookUp:
+            guard phase == .down else { return .none }
+            executeResolvedSystemShortcut(named: "lookUp")
+            return .none
+        case .navigationSwipe(let direction):
+            guard phase == .down else { return .none }
+            TouchSimulator.postNavigationSwipeEvent(direction: direction)
+            return .none
+        case .drag(let mode):
+            if phase == .down {
+                DragSessionManager.shared.start(mode: mode)
+            } else {
+                DragSessionManager.shared.stop()
+            }
+            return .none
+        case .scrollModification(let kind):
+            if phase == .down {
+                beginScrollModification(kind)
+            } else {
+                endScrollModification(kind)
+            }
+            return .none
         case .systemShortcut(let identifier):
             guard phase == .down else { return .none }
             executeResolvedSystemShortcut(named: identifier)
             return .none
+        }
+    }
+
+    /// 从 ButtonEffect 解析动作 (新引擎入口)
+    func resolve(effect: ButtonEffect) -> ResolvedAction? {
+        switch effect {
+        case .systemShortcut(let identifier):
+            return resolveAction(named: identifier)
+        case .customKey(let code, let modifiers):
+            return .customKey(code: code, modifiers: modifiers)
+        case .customMouseButton(let buttonNumber, let modifiers):
+            if let kind = MouseButtonActionKind(buttonNumber: buttonNumber), modifiers == 0 {
+                return .mouseButton(kind: kind)
+            }
+            if let nativeCode = LogiStandardMouseButtonAlias.nativeButtonCode(forMosCode: buttonNumber),
+               let kind = MouseButtonActionKind(buttonNumber: nativeCode),
+               modifiers == 0 {
+                return .mouseButton(kind: kind)
+            }
+            return .customMouseButton(buttonNumber: buttonNumber, modifiers: modifiers)
+        case .mouseButtonClicks(let buttonNumber, let count):
+            return .mouseButtonClicks(buttonNumber: buttonNumber, count: count)
+        case .mosScroll(let role):
+            return .mosScroll(role: role)
+        case .systemDefinedEvent(let type, let flags):
+            return .systemDefinedEvent(type: type, flags: flags)
+        case .smartZoom:
+            return .smartZoom
+        case .lookUp:
+            return .lookUp
+        case .navigationSwipe(let direction):
+            return .navigationSwipe(direction: direction)
+        case .openTarget(let payload):
+            return .openTarget(payload: payload)
+        case .logiAction(let identifier):
+            return .logiAction(identifier: identifier)
+        case .drag(let mode):
+            return .drag(mode: mode)
+        case .scrollModification(let kind):
+            return .scrollModification(kind: kind)
+        }
+    }
+
+    // MARK: - 滚动修饰
+
+    private func beginScrollModification(_ kind: ScrollModificationKind) {
+        let count = (scrollModificationCounts[kind] ?? 0) + 1
+        scrollModificationCounts[kind] = count
+        if count == 1 {
+            scrollModificationPort?.setScrollModification(kind, active: true)
+        }
+    }
+
+    private func endScrollModification(_ kind: ScrollModificationKind) {
+        let count = max(0, (scrollModificationCounts[kind] ?? 0) - 1)
+        scrollModificationCounts[kind] = count
+        if count == 0 {
+            scrollModificationPort?.setScrollModification(kind, active: false)
         }
     }
 
@@ -532,6 +646,83 @@ class ShortcutExecutor {
         return CGPoint(x: location.x, y: screenHeight - location.y)
     }
 
+    // MARK: - System Defined Events
+
+    /// 系统定义事件 (媒体键/音量/亮度等)
+    /// data1 布局: base bits (1<<9 | 1<<11) | (type << 16), up 事件附加 pressed mask (1<<8).
+    private func postSystemDefinedEvent(type: UInt32, flags: UInt64) {
+        let location = NSEvent.mouseLocation
+        let timestamp = ProcessInfo.processInfo.systemUptime
+        let base: Int = (1 << 9) | (1 << 11)
+        let data = base | (Int(type) << 16)
+        let modifierFlags = NSEvent.ModifierFlags(rawValue: UInt(flags))
+
+        if let downEvent = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: location,
+            modifierFlags: modifierFlags,
+            timestamp: timestamp,
+            windowNumber: -1,
+            context: nil,
+            subtype: 8,
+            data1: data,
+            data2: -1
+        )?.cgEvent {
+            downEvent.setIntegerValueField(.eventSourceUserData, value: MosEventMarker.syntheticCustom)
+            notifyOrPostMouseEvent(downEvent)
+        }
+
+        if let upEvent = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: location,
+            modifierFlags: modifierFlags,
+            timestamp: timestamp,
+            windowNumber: -1,
+            context: nil,
+            subtype: 8,
+            data1: data | (1 << 8),
+            data2: -1
+        )?.cgEvent {
+            upEvent.setIntegerValueField(.eventSourceUserData, value: MosEventMarker.syntheticCustom)
+            notifyOrPostMouseEvent(upEvent)
+        }
+    }
+
+    /// 任意鼠标按钮 n 连击 (一次性动作)
+    private func postMouseButtonClicks(buttonNumber: UInt16, count: Int) {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        let point = currentMouseLocationForCGEvent()
+        let clicks = max(count, 1)
+        let downSpec = mouseEventSpec(buttonNumber: Int64(buttonNumber), phase: .down)
+        let upSpec = mouseEventSpec(buttonNumber: Int64(buttonNumber), phase: .up)
+        for _ in 0..<clicks {
+            if let down = CGEvent(
+                mouseEventSource: source,
+                mouseType: downSpec.type,
+                mouseCursorPosition: point,
+                mouseButton: downSpec.button
+            ) {
+                if let number = downSpec.buttonNumber {
+                    down.setIntegerValueField(.mouseEventButtonNumber, value: number)
+                }
+                down.setIntegerValueField(.eventSourceUserData, value: MosEventMarker.syntheticCustom)
+                notifyOrPostMouseEvent(down)
+            }
+            if let up = CGEvent(
+                mouseEventSource: source,
+                mouseType: upSpec.type,
+                mouseCursorPosition: point,
+                mouseButton: upSpec.button
+            ) {
+                if let number = upSpec.buttonNumber {
+                    up.setIntegerValueField(.mouseEventButtonNumber, value: number)
+                }
+                up.setIntegerValueField(.eventSourceUserData, value: MosEventMarker.syntheticCustom)
+                notifyOrPostMouseEvent(up)
+            }
+        }
+    }
+
     // MARK: - Logi HID++ Actions
 
     /// 执行 Logitech HID++ 动作
@@ -756,6 +947,14 @@ class ShortcutExecutor {
     private func notifyOrPostMouseEvent(_ event: CGEvent) {
         if let testingMouseEventObserver {
             testingMouseEventObserver(event)
+            return
+        }
+        event.post(tap: .cghidEventTap)
+    }
+
+    private func notifyOrPostKeyEvent(_ event: CGEvent) {
+        if let testingKeyEventObserver {
+            testingKeyEventObserver(event)
             return
         }
         event.post(tap: .cghidEventTap)

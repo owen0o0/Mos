@@ -40,6 +40,7 @@ struct OptionItem {
 
     struct Button {
         static let Bindings = "buttonBindings"
+        static let Remaps = "buttonRemaps"
     }
 
     struct Application {
@@ -227,6 +228,7 @@ extension Options {
         }
         // 按钮绑定
         buttons.binding = loadButtonsData()
+        buttons.remaps = loadButtonRemapsData()
         ButtonUtils.shared.invalidateCache()
         // 应用
         application.allowlist = UserDefaults.standard.bool(forKey: OptionItem.Application.Allowlist)
@@ -271,6 +273,7 @@ extension Options {
             UserDefaults.standard.set(scroll.smoothHorizontal, forKey: OptionItem.Scroll.SmoothHorizontal)
         case .buttons:
             saveButtonBindingsData()
+            saveButtonRemapsData()
         case .application:
             UserDefaults.standard.set(application.allowlist, forKey: OptionItem.Application.Allowlist)
             if let applicationsData = application.applications.json() {
@@ -352,6 +355,33 @@ extension Options {
         } catch {
             NSLog("Failed to encode button bindings data: \(error), skipping save")
         }
+    }
+
+    // 加载按钮重映射 (新引擎)
+    private func loadButtonRemapsData() -> [ButtonRemap] {
+        let rawValue = UserDefaults.standard.object(forKey: OptionItem.Button.Remaps)
+        guard let data = rawValue as? Data else {
+            if rawValue != nil {
+                NSLog("Button remaps data has wrong type: \(type(of: rawValue)), clearing corrupted data")
+                UserDefaults.standard.removeObject(forKey: OptionItem.Button.Remaps)
+            }
+            return []
+        }
+        guard let remaps = try? decoder.decode([ButtonRemap].self, from: data) else {
+            NSLog("Failed to decode button remaps, clearing corrupted data")
+            UserDefaults.standard.removeObject(forKey: OptionItem.Button.Remaps)
+            return []
+        }
+        return remaps
+    }
+
+    // 保存按钮重映射 (新引擎)
+    private func saveButtonRemapsData() {
+        guard let data = try? encoder.encode(buttons.remaps) else {
+            NSLog("Failed to encode button remaps data, skipping save")
+            return
+        }
+        UserDefaults.standard.set(data, forKey: OptionItem.Button.Remaps)
     }
 
     // 加载滚动热键 (支持从旧版 Int 格式迁移)

@@ -17,6 +17,11 @@
 		754D86BF951F4E0C56F76E8D /* MosTests/ScrollPosterStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CCA64306C761E8CA5D0759A /* MosTests/ScrollPosterStateTests.swift */; };
 		9ACEB06D964AE340A82C0792 /* MosTests/ScrollPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F59E07FB2E69806EAED5405 /* MosTests/ScrollPhaseTests.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* MosTests/ButtonBindingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* MosTests/ButtonBindingTests.swift */; };
+		E1C1C1C1000000000000000A /* MosTests/ClickCycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C1000000000000000B /* MosTests/ClickCycleTests.swift */; };
+		E1C1C1C10000000000000021 /* MosTests/ButtonGestureRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C10000000000000022 /* MosTests/ButtonGestureRecorderTests.swift */; };
+		E1C1C1C10000000000000011 /* MosTests/ButtonRemapUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C10000000000000012 /* MosTests/ButtonRemapUITests.swift */; };
+		E1C1C1C1000000000000000C /* MosTests/ButtonRemapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C1000000000000000D /* MosTests/ButtonRemapTests.swift */; };
+		E1C1C1C1000000000000000E /* MosTests/ButtonRemapEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C1000000000000000F /* MosTests/ButtonRemapEngineTests.swift */; };
 		B2C3D4E5F6A7B8C9D0E1F200 /* MosTests/ButtonUtilsCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F201 /* MosTests/ButtonUtilsCacheTests.swift */; };
 		B3D4E5F6A7B8C9D0E1F40100 /* MosTests/MouseInteractionSessionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D4E5F6A7B8C9D0E1F40101 /* MosTests/MouseInteractionSessionControllerTests.swift */; };
 		BF0CC4D63CC0E5FE8FCF6E01 /* MosTests/ScrollFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31AFD832EF49533E8168BAA0 /* MosTests/ScrollFilterTests.swift */; };
@@ -86,6 +91,11 @@
 		9CCA64306C761E8CA5D0759A /* MosTests/ScrollPosterStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ScrollPosterStateTests.swift; sourceTree = SOURCE_ROOT; };
 		9D4A7F821E5626C63C45D698 /* MosTests/InterpolatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/InterpolatorTests.swift; sourceTree = SOURCE_ROOT; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* MosTests/ButtonBindingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonBindingTests.swift; sourceTree = SOURCE_ROOT; };
+		E1C1C1C1000000000000000B /* MosTests/ClickCycleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ClickCycleTests.swift; sourceTree = SOURCE_ROOT; };
+		E1C1C1C10000000000000022 /* MosTests/ButtonGestureRecorderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonGestureRecorderTests.swift; sourceTree = SOURCE_ROOT; };
+		E1C1C1C10000000000000012 /* MosTests/ButtonRemapUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonRemapUITests.swift; sourceTree = SOURCE_ROOT; };
+		E1C1C1C1000000000000000D /* MosTests/ButtonRemapTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonRemapTests.swift; sourceTree = SOURCE_ROOT; };
+		E1C1C1C1000000000000000F /* MosTests/ButtonRemapEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonRemapEngineTests.swift; sourceTree = SOURCE_ROOT; };
 		B2C3D4E5F6A7B8C9D0E1F201 /* MosTests/ButtonUtilsCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonUtilsCacheTests.swift; sourceTree = SOURCE_ROOT; };
 		B3D4E5F6A7B8C9D0E1F40101 /* MosTests/MouseInteractionSessionControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/MouseInteractionSessionControllerTests.swift; sourceTree = SOURCE_ROOT; };
 		C3D4E5F6A7B8C9D0E1F30201 /* MosTests/InputProcessorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/InputProcessorTests.swift; sourceTree = SOURCE_ROOT; };
@@ -176,6 +186,11 @@
 				F00A00000000000000000006 /* MosTests/ShortcutExecutorOpenTargetTests.swift */,
 				AA1011FA00000000000000B1 /* MosTests/ScrollTargetApplicationRulesTests.swift */,
 				A1B2C3D4E5F6A7B8C9D0E1F3 /* MosTests/ButtonBindingTests.swift */,
+				E1C1C1C1000000000000000B /* MosTests/ClickCycleTests.swift */,
+				E1C1C1C10000000000000022 /* MosTests/ButtonGestureRecorderTests.swift */,
+				E1C1C1C10000000000000012 /* MosTests/ButtonRemapUITests.swift */,
+				E1C1C1C1000000000000000D /* MosTests/ButtonRemapTests.swift */,
+				E1C1C1C1000000000000000F /* MosTests/ButtonRemapEngineTests.swift */,
 				B2C3D4E5F6A7B8C9D0E1F201 /* MosTests/ButtonUtilsCacheTests.swift */,
 				C4E5F6A7B8C9D0E1F3020201 /* MosTests/ButtonCapturePresentationStatusTests.swift */,
 				C3D4E5F6A7B8C9D0E1F30201 /* MosTests/InputProcessorTests.swift */,
@@ -396,6 +411,11 @@
 				F00A00000000000000000005 /* MosTests/ShortcutExecutorOpenTargetTests.swift in Sources */,
 				FECC8D1CC04A0A99B1E1A8EB /* MosTests/InterpolatorTests.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* MosTests/ButtonBindingTests.swift in Sources */,
+				E1C1C1C1000000000000000A /* MosTests/ClickCycleTests.swift in Sources */,
+				E1C1C1C10000000000000021 /* MosTests/ButtonGestureRecorderTests.swift in Sources */,
+				E1C1C1C10000000000000011 /* MosTests/ButtonRemapUITests.swift in Sources */,
+				E1C1C1C1000000000000000C /* MosTests/ButtonRemapTests.swift in Sources */,
+				E1C1C1C1000000000000000E /* MosTests/ButtonRemapEngineTests.swift in Sources */,
 				B2C3D4E5F6A7B8C9D0E1F200 /* MosTests/ButtonUtilsCacheTests.swift in Sources */,
 				C3D4E5F6A7B8C9D0E1F30200 /* MosTests/InputProcessorTests.swift in Sources */,
 				D1A2B3C4E5F6A7B8C9D01000 /* MosTests/LogiDivertPlannerTests.swift in Sources */,
@@ -461,7 +481,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
@@ -511,7 +531,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = N7Z52F27XK;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -576,7 +596,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = N7Z52F27XK;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = NO;
@@ -614,15 +634,14 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Mos/MosRelease.entitlements;
 				CODE_SIGN_IDENTITY = "-";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 20260708.1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = N7Z52F27XK;
-				ENABLE_HARDENED_RUNTIME = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
 				INFOPLIST_FILE = Mos/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mos Debug";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -660,14 +679,13 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Mos/MosRelease.entitlements;
 				CODE_SIGN_IDENTITY = "-";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 20260708.1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = N7Z52F27XK;
-				ENABLE_HARDENED_RUNTIME = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
 				GCC_OPTIMIZATION_LEVEL = fast;
 				INFOPLIST_FILE = Mos/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Mos;
@@ -699,7 +717,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";

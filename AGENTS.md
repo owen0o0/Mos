@@ -51,6 +51,7 @@ scripts/qa/lint-logi-boundary.sh
 
 改动完成前，根据风险选择验证，不要只靠静态阅读宣称通过。最低要求：
 
+- 功能完成收尾默认执行 `xcodebuild clean` + Debug/Release 双配置 build（用户约定的常规验证，与风险无关也要跑）。
 - bugfix 优先补回归测试；无法测试时说明原因和人工验证路径。
 - Swift 逻辑改动至少跑相关 `MosTests`。
 - Xcode 工程、target membership 或跨模块改动跑 Debug build。
