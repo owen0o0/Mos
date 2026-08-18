@@ -53,8 +53,10 @@ Mos is a free, open-source menu bar utility for macOS 10.13 and later.
 - **Scroll hotkeys**: bind custom keys for acceleration, axis conversion, and temporarily disabling smooth scrolling.
 - **Per-app profiles**: let each app inherit global settings, or override scroll, shortcut, and button-binding behavior.
 - **Button bindings**: record mouse, keyboard, or custom events, then bind them to system actions, shortcuts, apps, scripts, or files.
+- **Button gestures**: Smart Zoom, Look Up & Quick Look, and navigation swipe, plus two/three-finger swipe, two-finger pinch zoom, and four-finger pinch while holding a button.
 - **Action library**: built-in actions for Mission Control, Spaces, screenshots, Finder operations, document editing, mouse scrolling, and more.
 - **Logi/HID++ support**: handle Logitech button events from Bolt, Unifying, and Bluetooth direct-connected devices, including Logi-specific actions.
+- **Razer devices**: check Razer mouse battery and adjust DPI and polling rate in Settings (currently supporting the DeathAdder V3 Pro family).
 
 ## Screenshots
 

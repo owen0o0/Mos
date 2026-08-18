@@ -22,6 +22,7 @@
 		E1C1C1C10000000000000011 /* MosTests/ButtonRemapUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C10000000000000012 /* MosTests/ButtonRemapUITests.swift */; };
 		E1C1C1C1000000000000000C /* MosTests/ButtonRemapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C1000000000000000D /* MosTests/ButtonRemapTests.swift */; };
 		E1C1C1C1000000000000000E /* MosTests/ButtonRemapEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C1C1C1000000000000000F /* MosTests/ButtonRemapEngineTests.swift */; };
+		F4A5B6C7D8E9F0A1B2C3D4E1 /* MosTests/RazerProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5B6C7D8E9F0A1B2C3D4E2 /* MosTests/RazerProtocolTests.swift */; };
 		B2C3D4E5F6A7B8C9D0E1F200 /* MosTests/ButtonUtilsCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F201 /* MosTests/ButtonUtilsCacheTests.swift */; };
 		B3D4E5F6A7B8C9D0E1F40100 /* MosTests/MouseInteractionSessionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D4E5F6A7B8C9D0E1F40101 /* MosTests/MouseInteractionSessionControllerTests.swift */; };
 		BF0CC4D63CC0E5FE8FCF6E01 /* MosTests/ScrollFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31AFD832EF49533E8168BAA0 /* MosTests/ScrollFilterTests.swift */; };
@@ -96,6 +97,7 @@
 		E1C1C1C10000000000000012 /* MosTests/ButtonRemapUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonRemapUITests.swift; sourceTree = SOURCE_ROOT; };
 		E1C1C1C1000000000000000D /* MosTests/ButtonRemapTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonRemapTests.swift; sourceTree = SOURCE_ROOT; };
 		E1C1C1C1000000000000000F /* MosTests/ButtonRemapEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonRemapEngineTests.swift; sourceTree = SOURCE_ROOT; };
+		F4A5B6C7D8E9F0A1B2C3D4E2 /* MosTests/RazerProtocolTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/RazerProtocolTests.swift; sourceTree = SOURCE_ROOT; };
 		B2C3D4E5F6A7B8C9D0E1F201 /* MosTests/ButtonUtilsCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ButtonUtilsCacheTests.swift; sourceTree = SOURCE_ROOT; };
 		B3D4E5F6A7B8C9D0E1F40101 /* MosTests/MouseInteractionSessionControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/MouseInteractionSessionControllerTests.swift; sourceTree = SOURCE_ROOT; };
 		C3D4E5F6A7B8C9D0E1F30201 /* MosTests/InputProcessorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/InputProcessorTests.swift; sourceTree = SOURCE_ROOT; };
@@ -191,6 +193,7 @@
 				E1C1C1C10000000000000012 /* MosTests/ButtonRemapUITests.swift */,
 				E1C1C1C1000000000000000D /* MosTests/ButtonRemapTests.swift */,
 				E1C1C1C1000000000000000F /* MosTests/ButtonRemapEngineTests.swift */,
+				F4A5B6C7D8E9F0A1B2C3D4E2 /* MosTests/RazerProtocolTests.swift */,
 				B2C3D4E5F6A7B8C9D0E1F201 /* MosTests/ButtonUtilsCacheTests.swift */,
 				C4E5F6A7B8C9D0E1F3020201 /* MosTests/ButtonCapturePresentationStatusTests.swift */,
 				C3D4E5F6A7B8C9D0E1F30201 /* MosTests/InputProcessorTests.swift */,
@@ -416,6 +419,7 @@
 				E1C1C1C10000000000000011 /* MosTests/ButtonRemapUITests.swift in Sources */,
 				E1C1C1C1000000000000000C /* MosTests/ButtonRemapTests.swift in Sources */,
 				E1C1C1C1000000000000000E /* MosTests/ButtonRemapEngineTests.swift in Sources */,
+				F4A5B6C7D8E9F0A1B2C3D4E1 /* MosTests/RazerProtocolTests.swift in Sources */,
 				B2C3D4E5F6A7B8C9D0E1F200 /* MosTests/ButtonUtilsCacheTests.swift in Sources */,
 				C3D4E5F6A7B8C9D0E1F30200 /* MosTests/InputProcessorTests.swift in Sources */,
 				D1A2B3C4E5F6A7B8C9D01000 /* MosTests/LogiDivertPlannerTests.swift in Sources */,

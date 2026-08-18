@@ -27,6 +27,14 @@ import Cocoa
 class PreferencesTabViewController: NSTabViewController {
     
     let backgroundVisualEffectView = NSVisualEffectView()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // 本地化"设备"tab 标题
+        if let devicesItem = tabViewItems.first(where: { $0.identifier as? String == "devices" }) {
+            devicesItem.label = NSLocalizedString("preferences_tab_devices", comment: "")
+        }
+    }
     
     override func viewDidAppear() {
         // 移除已有约束

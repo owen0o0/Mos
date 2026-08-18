@@ -71,6 +71,7 @@
                         <tabViewItem identifier="general" image="SF.gearshape" id="Qwc-OE-zHR"/>
                         <tabViewItem identifier="scrolling" image="SF.circle.dotted.circle" id="P9R-tX-qfW"/>
                         <tabViewItem identifier="buttons" image="SF.button.horizontal.top.press" id="BTN-UI-123"/>
+                        <tabViewItem identifier="devices" image="SF.computermouse" id="DEV-UI-123"/>
                         <tabViewItem identifier="application" image="SF.app.background.dotted" id="gfS-Ix-zI5"/>
                         <tabViewItem identifier="updates" image="SF.arrow.triangle.capsulepath" id="1sm-Qq-6GS"/>
                         <tabViewItem identifier="about" image="SF.person.crop.circle.dashed" id="MrA-I8-n0Z"/>
@@ -89,6 +90,7 @@
                         <segue destination="ITL-GD-CPd" kind="relationship" relationship="tabItems" id="z3c-tg-aDc"/>
                         <segue destination="iW5-CD-5OC" kind="relationship" relationship="tabItems" id="GA4-xY-65w"/>
                         <segue destination="BTN-VC-123" kind="relationship" relationship="tabItems" id="BTN-SG-123"/>
+                        <segue destination="DEV-VC-123" kind="relationship" relationship="tabItems" id="DEV-SG-123"/>
                         <segue destination="bga-wG-iim" kind="relationship" relationship="tabItems" id="QV9-il-C7g"/>
                         <segue destination="EWu-DP-7Gj" kind="relationship" relationship="tabItems" id="gsT-c8-cJ3"/>
                         <segue destination="RfV-Ow-3mF" kind="relationship" relationship="tabItems" id="djr-7D-XVN"/>
@@ -538,6 +540,19 @@
                 <customObject id="BTN-FR-123" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
             <point key="canvasLocation" x="1443" y="1277"/>
+        </scene>
+        <!--Devices-->
+        <scene sceneID="DEV-SC-123">
+            <objects>
+                <viewController title="Devices" storyboardIdentifier="devices" id="DEV-VC-123" customClass="PreferencesDevicesViewController" customModule="Mos" customModuleProvider="target" sceneMemberID="viewController">
+                    <visualEffectView key="view" blendingMode="behindWindow" material="toolTip" state="followsWindowActiveState" id="DEV-VW-123">
+                        <rect key="frame" x="0.0" y="0.0" width="450" height="320"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMaxX="YES" flexibleMinY="YES" flexibleMaxY="YES"/>
+                    </visualEffectView>
+                </viewController>
+                <customObject id="DEV-FR-123" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="1443" y="1770"/>
         </scene>
         <!--Application-->
         <scene sceneID="UqT-28-MT6">
