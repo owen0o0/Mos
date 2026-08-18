@@ -221,7 +221,7 @@
             <objects>
                 <viewController title="Buttons" storyboardIdentifier="buttons" id="BTN-VC-123" customClass="PreferencesButtonsViewController" customModule="Mos" customModuleProvider="target" sceneMemberID="viewController">
                     <visualEffectView key="view" blendingMode="behindWindow" material="toolTip" state="followsWindowActiveState" id="BTN-VW-123">
-                        <rect key="frame" x="0.0" y="0.0" width="450" height="321"/>
+                        <rect key="frame" x="0.0" y="0.0" width="450" height="521"/>
                         <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMaxX="YES" flexibleMinY="YES" flexibleMaxY="YES"/>
                         <subviews>
                             <visualEffectView blendingMode="behindWindow" material="toolTip" state="followsWindowActiveState" translatesAutoresizingMaskIntoConstraints="NO" id="2W2-hM-ME3">
@@ -260,13 +260,13 @@
                                 </constraints>
                             </visualEffectView>
                             <scrollView borderType="none" autohidesScrollers="YES" horizontalLineScroll="52" horizontalPageScroll="10" verticalLineScroll="52" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" findBarPosition="aboveHorizontalRuler" translatesAutoresizingMaskIntoConstraints="NO" id="ftV-jh-kjD">
-                                <rect key="frame" x="0.0" y="31" width="450" height="260"/>
+                                <rect key="frame" x="0.0" y="31" width="450" height="460"/>
                                 <clipView key="contentView" drawsBackground="NO" copiesOnScroll="NO" id="9qm-Wz-Rwq">
-                                    <rect key="frame" x="0.0" y="0.0" width="450" height="260"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="450" height="460"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="inset" columnReordering="NO" columnSelection="YES" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" rowHeight="52" rowSizeStyle="automatic" viewBased="YES" floatsGroupRows="NO" id="tU8-ze-w7X">
-                                            <rect key="frame" x="0.0" y="0.0" width="450" height="260"/>
+                                            <rect key="frame" x="0.0" y="0.0" width="450" height="460"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <size key="intercellSpacing" width="17" height="0.0"/>
                                             <color key="backgroundColor" red="0.11764705882352941" green="0.11764705882352941" blue="0.11764705882352941" alpha="0.0" colorSpace="custom" customColorSpace="sRGB"/>
@@ -355,7 +355,7 @@
                                 </clipView>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="450" id="O6a-JW-Ptw"/>
-                                    <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="260" id="wgU-xJ-cqJ"/>
+                                    <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="460" id="wgU-xJ-cqJ"/>
                                 </constraints>
                                 <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="R1g-hj-G0Y">
                                     <rect key="frame" x="-100" y="-100" width="450" height="15"/>
@@ -545,7 +545,7 @@
                 <customObject id="l11-a0-4Xa" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
                 <viewController title="Application" storyboardIdentifier="application" id="bga-wG-iim" customClass="PreferencesApplicationViewController" customModule="Mos" customModuleProvider="target" sceneMemberID="viewController">
                     <visualEffectView key="view" wantsLayer="YES" blendingMode="behindWindow" material="toolTip" state="followsWindowActiveState" id="jc3-9p-Bfo">
-                        <rect key="frame" x="0.0" y="0.0" width="450" height="321"/>
+                        <rect key="frame" x="0.0" y="0.0" width="450" height="421"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <visualEffectView appearanceType="inheritedVibrantLight" blendingMode="behindWindow" material="underWindowBackground" state="active" translatesAutoresizingMaskIntoConstraints="NO" id="VAL-LC-T3T">
@@ -596,13 +596,13 @@
                                 </constraints>
                             </visualEffectView>
                             <scrollView borderType="none" autohidesScrollers="YES" horizontalLineScroll="57" horizontalPageScroll="10" verticalLineScroll="57" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" findBarPosition="aboveHorizontalRuler" translatesAutoresizingMaskIntoConstraints="NO" id="2dP-HG-cdi">
-                                <rect key="frame" x="0.0" y="31" width="450" height="260"/>
+                                <rect key="frame" x="0.0" y="31" width="450" height="360"/>
                                 <clipView key="contentView" drawsBackground="NO" copiesOnScroll="NO" id="bif-Bv-tOQ">
-                                    <rect key="frame" x="0.0" y="0.0" width="450" height="260"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="450" height="360"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="inset" columnReordering="NO" columnSelection="YES" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" rowHeight="45" rowSizeStyle="automatic" viewBased="YES" floatsGroupRows="NO" id="LmV-gi-3fE">
-                                            <rect key="frame" x="0.0" y="0.0" width="450" height="260"/>
+                                            <rect key="frame" x="0.0" y="0.0" width="450" height="360"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <size key="intercellSpacing" width="0.0" height="12"/>
                                             <color key="backgroundColor" red="0.11764705882352941" green="0.11764705882352941" blue="0.11764705882352941" alpha="0.0" colorSpace="custom" customColorSpace="sRGB"/>
@@ -699,7 +699,7 @@
                                     <nil key="backgroundColor"/>
                                 </clipView>
                                 <constraints>
-                                    <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="260" id="W0X-YA-7Zq"/>
+                                    <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="360" id="W0X-YA-7Zq"/>
                                 </constraints>
                                 <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="8dl-2h-i32">
                                     <rect key="frame" x="-100" y="-100" width="450" height="15"/>
