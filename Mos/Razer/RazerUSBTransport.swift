@@ -64,6 +64,19 @@ final class RazerUSBDevice {
     /// 接口结构体指针 (*selfPtr)
     private let interfacePtr: UnsafeMutablePointer<IOUSBDeviceInterface>
     private var isOpen = false
+    /// 最近一次控制传输结果 (供管理器判断句柄是否失效)
+    private(set) var lastControlError: IOReturn = kIOReturnSuccess
+
+    /// 控制传输失败且句柄大概率失效 (设备断开 / 休眠 / 被占用)
+    var isStale: Bool {
+        switch lastControlError {
+        case kIOReturnNotOpen, kIOReturnNoDevice, kIOReturnAborted,
+             kIOReturnIOError, kIOReturnNotResponding, kIOReturnExclusiveAccess:
+            return true
+        default:
+            return false
+        }
+    }
 
     // MARK: - 构造
 
@@ -187,9 +200,12 @@ final class RazerUSBDevice {
 
     private func deviceRequest(_ request: inout IOUSBDevRequest) -> IOReturn {
         guard let slot = Self.vtableFunction(interfacePtr, offset: 208) else {
+            lastControlError = kIOReturnError
             return kIOReturnError
         }
-        return unsafeBitCast(slot, to: FnDeviceRequest.self)(selfPtr, &request)
+        let result = unsafeBitCast(slot, to: FnDeviceRequest.self)(selfPtr, &request)
+        lastControlError = result
+        return result
     }
 
     // MARK: - vtable 工具

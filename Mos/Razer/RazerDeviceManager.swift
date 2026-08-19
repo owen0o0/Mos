@@ -9,6 +9,7 @@
 import IOKit
 import CoreFoundation
 import Foundation
+import AppKit
 
 /// Razer 设备能力与当前状态 (UI 只读快照)
 struct RazerDeviceState {
@@ -55,6 +56,12 @@ final class RazerDeviceManager {
     /// 最近一次读取的设备状态缓存 (ioQueue 读写, publish 时快照)
     private var stateCache: [UInt32: RazerDeviceState] = [:]
     private var batteryTimer: Timer?
+    private var wakeObserver: NSObjectProtocol?
+    /// 设备连续控制失败计数 (>=2 触发重开/重枚举)
+    private var failureCounts: [UInt32: Int] = [:]
+    /// 重枚举冷却, 避免失败时高频重建句柄
+    private var lastReenumerateTime: CFTimeInterval = 0
+    private let reenumerateCooldown: TimeInterval = 5.0
     private var hasStarted = false
 
     private init() {}
@@ -108,11 +115,26 @@ final class RazerDeviceManager {
         }
         RunLoop.main.add(timer, forMode: .common)
         batteryTimer = timer
+
+        // 睡眠唤醒后 USB 设备需要时间重新就绪, 丢弃旧句柄重新枚举
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.handleSystemWake()
+            }
+        }
     }
 
     func stop() {
         guard hasStarted else { return }
         hasStarted = false
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
         batteryTimer?.invalidate()
         batteryTimer = nil
         if matchedNotification != 0 {
@@ -128,6 +150,8 @@ final class RazerDeviceManager {
             self.notificationPort = nil
         }
         deviceHandles.removeAll()
+        stateCache.removeAll()
+        failureCounts.removeAll()
         devices = []
     }
 
@@ -259,7 +283,64 @@ final class RazerDeviceManager {
                 state.pollRate = response.pollRate
             }
         }
+        if handle.isStale {
+            handleFailure(handle.locationID)
+            return nil
+        }
         return state
+    }
+
+    /// 设备句柄失效恢复: 连续失败后先关开重试, 再不行丢弃并重新枚举
+    private func handleFailure(_ locationID: UInt32) {
+        let count = (failureCounts[locationID] ?? 0) + 1
+        failureCounts[locationID] = count
+        guard count >= 2 else { return }
+        failureCounts[locationID] = 0
+
+        ioQueue.async { [weak self] in
+            guard let self, let handle = self.deviceHandles[locationID] else { return }
+            handle.close()
+            if handle.open() {
+                // 重开成功: 清掉旧缓存重新读取
+                self.stateCache.removeValue(forKey: locationID)
+                if let state = self.readState(from: handle, batteryOnly: false) {
+                    self.stateCache[locationID] = state
+                }
+                DispatchQueue.main.async { self.publishSnapshot() }
+            } else {
+                // 句柄彻底失效: 丢弃并重新枚举
+                self.deviceHandles.removeValue(forKey: locationID)
+                self.stateCache.removeValue(forKey: locationID)
+                self.scheduleReenumerate()
+                DispatchQueue.main.async { self.publishSnapshot() }
+            }
+        }
+    }
+
+    /// 睡眠唤醒: 关闭全部句柄, 稍后重新枚举 (设备可能已重枚举/重置)
+    private func handleSystemWake() {
+        ioQueue.async { [weak self] in
+            guard let self else { return }
+            for (_, handle) in self.deviceHandles {
+                handle.close()
+            }
+            self.deviceHandles.removeAll()
+            self.stateCache.removeAll()
+            self.failureCounts.removeAll()
+            DispatchQueue.main.async {
+                self.enumerateFromIterator()
+            }
+        }
+    }
+
+    /// 带冷却的重枚举调度
+    private func scheduleReenumerate() {
+        let now = CFAbsoluteTimeGetCurrent()
+        guard now - lastReenumerateTime > reenumerateCooldown else { return }
+        lastReenumerateTime = now
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.enumerateFromIterator()
+        }
     }
 
     /// 设备写操作 (DPI / 回报率), 完成后刷新快照
