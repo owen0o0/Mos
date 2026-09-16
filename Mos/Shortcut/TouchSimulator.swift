@@ -8,6 +8,7 @@
 //  - 导航滑动 (kIOHIDEventTypeNavigationSwipe = 16, 浏览器前进/后退)
 //
 //  注意: 这些 field 常量未公开, 属于私有 API 用法; macOS 升级后可能失效.
+//  macOS 27+: WindowServer 忽略上述 CGEvent fields, dock swipe 必须额外挂上 IOHIDEvent.
 //  Created by Claude on 2026/8/17.
 //  Copyright © 2026 Caldis. All rights reserved.
 //
@@ -231,13 +232,23 @@ enum TouchSimulator {
         dockEvent?.setDoubleValueField(fieldDockAxis2, value: Double(axis.rawValue))
         dockEvent?.setIntegerValueField(fieldInvertedFromDevice, value: effectiveInverted ? 1 : 0)
 
+        var exitSpeed: Double?
         if effectivePhase == .ended || effectivePhase == .cancelled {
-            let exitSpeed = dockSwipeLastDelta * 100
-            dockEvent?.setDoubleValueField(fieldExitSpeed, value: exitSpeed)
-            dockEvent?.setDoubleValueField(fieldExitSpeed2, value: exitSpeed)
+            exitSpeed = dockSwipeLastDelta * 100
+            if let exitSpeed {
+                dockEvent?.setDoubleValueField(fieldExitSpeed, value: exitSpeed)
+                dockEvent?.setDoubleValueField(fieldExitSpeed2, value: exitSpeed)
+            }
         }
 
         if let dockEvent {
+            attachDockSwipeHIDEventIfNeeded(
+                to: dockEvent,
+                axis: axis,
+                phase: effectivePhase,
+                progress: dockSwipeOriginOffset,
+                velocity: exitSpeed
+            )
             post(dockEvent, to: .cgSessionEventTap)
         }
         if let gestureEvent {
@@ -259,6 +270,37 @@ enum TouchSimulator {
         event.setIntegerValueField(fieldEventType, value: Int64(NSEvent.EventType.gesture.rawValue))
         event.setIntegerValueField(fieldHIDEventType, value: hidEventTypeZoomToggle)
         post(event)
+    }
+
+    /// macOS 27+ 把真实 IOHIDEvent 挂到 dock swipe CGEvent 上.
+    /// originOffset 保持设备坐标系; HID/WindowServer 会按系统自然滚动自行处理方向.
+    private static func attachDockSwipeHIDEventIfNeeded(
+        to event: CGEvent,
+        axis: DockSwipeAxis,
+        phase: DockSwipePhase,
+        progress: Double,
+        velocity: Double?
+    ) {
+        guard DockSwipeHIDEvent.isRequired else { return }
+        let attached = DockSwipeHIDEvent.attach(
+            to: event,
+            payload: DockSwipeHIDEvent.payload(
+                axis: axis,
+                phase: phase,
+                progress: progress,
+                velocity: velocity
+            )
+        )
+        if !attached {
+            logHIDAttachFailureOnce()
+        }
+    }
+
+    private static var didLogHIDAttachFailure = false
+    private static func logHIDAttachFailureOnce() {
+        guard !didLogHIDAttachFailure else { return }
+        didLogHIDAttachFailure = true
+        NSLog("TouchSimulator: failed to attach dock swipe HID event on macOS 27+")
     }
 
     private static func post(_ event: CGEvent) {
