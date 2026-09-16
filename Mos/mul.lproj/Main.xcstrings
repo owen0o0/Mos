@@ -3370,6 +3370,18 @@
         }
       }
     },
+    "DEV-VC-123.title" : {
+      "comment" : "Class = \"NSViewController\"; title = \"Devices\"; ObjectID = \"DEV-VC-123\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Devices"
+          }
+        }
+      }
+    },
     "dhF-95-kUJ.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Manually Select From Finder\"; ObjectID = \"dhF-95-kUJ\";",
       "extractionState" : "extracted_with_value",
