@@ -67,11 +67,11 @@ final class RazerUSBDevice {
     /// 最近一次控制传输结果 (供管理器判断句柄是否失效)
     private(set) var lastControlError: IOReturn = kIOReturnSuccess
 
-    /// 控制传输失败且句柄大概率失效 (设备断开 / 休眠 / 被占用)
+    /// 控制传输失败且句柄大概率失效 (设备断开 / 未打开 / 被占用)
+    /// 无线接收器上 IOError / NotResponding 很常见, 不应当成句柄已死.
     var isStale: Bool {
         switch lastControlError {
-        case kIOReturnNotOpen, kIOReturnNoDevice, kIOReturnAborted,
-             kIOReturnIOError, kIOReturnNotResponding, kIOReturnExclusiveAccess:
+        case kIOReturnNotOpen, kIOReturnNoDevice, kIOReturnExclusiveAccess:
             return true
         default:
             return false
@@ -177,12 +177,26 @@ final class RazerUSBDevice {
         return result
     }
 
-    /// 发送请求并读取响应 (GET_REPORT)
-    func getResponse(for request: RazerReport, index: UInt16 = 0, waitMicroseconds: useconds_t = 31_000) -> RazerResponse? {
+    /// 发送请求并读取响应 (GET_REPORT). BUSY 时只重试读取.
+    func getResponse(for request: RazerReport, index: UInt16 = 0) -> RazerResponse? {
         let sendResult = sendReport(request, index: index)
         guard sendResult == kIOReturnSuccess else { return nil }
-        usleep(waitMicroseconds)
 
+        for attempt in 0..<RazerUSBRetry.maxGetAttempts {
+            usleep(RazerUSBRetry.waitMicroseconds(attempt: attempt))
+            guard let response = getReport(index: index) else {
+                if isStale { return nil }
+                continue
+            }
+            if response.isSuccess { return response }
+            if !RazerUSBRetry.shouldRetryGet(status: response.status) {
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private func getReport(index: UInt16) -> RazerResponse? {
         var getRequest = IOUSBDevRequest()
         getRequest.bRequest = 0x01 // HID_REQ_GET_REPORT
         getRequest.bmRequestType = 0xA1 // USB_TYPE_CLASS | USB_RECIP_INTERFACE | DIR_IN

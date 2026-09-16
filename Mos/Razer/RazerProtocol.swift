@@ -11,6 +11,7 @@
 //  Copyright © 2026 Caldis. All rights reserved.
 //
 
+import Darwin
 import Foundation
 
 /// 90 字节 razer_report
@@ -143,9 +144,46 @@ enum RazerCommand {
 
 // MARK: - 响应解析
 
+/// GET_REPORT 响应状态 (openrazer / librazermacos)
+enum RazerReportStatus {
+    static let newCommand: UInt8 = 0x00
+    static let busy: UInt8 = 0x01
+    static let successful: UInt8 = 0x02
+    static let failure: UInt8 = 0x03
+    static let timeout: UInt8 = 0x04
+    static let notSupported: UInt8 = 0x05
+}
+
+/// GET_REPORT 在 BUSY/未就绪时只重试读取, 不再发 SET_REPORT
+enum RazerUSBRetry {
+    static let maxGetAttempts = 8
+
+    static func shouldRetryGet(status: UInt8) -> Bool {
+        switch status {
+        case RazerReportStatus.newCommand, RazerReportStatus.busy, RazerReportStatus.timeout:
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func waitMicroseconds(attempt: Int) -> useconds_t {
+        let clamped = UInt32(min(max(attempt, 0), 5))
+        return 12_000 + clamped * 6_000
+    }
+}
+
 /// GET_REPORT 响应 (含报告 ID 前缀; 载荷偏移与请求报文一致: 8/9/10)
 struct RazerResponse {
     let bytes: [UInt8]
+
+    var status: UInt8 {
+        return bytes.first ?? 0
+    }
+
+    var isSuccess: Bool {
+        return status == RazerReportStatus.successful
+    }
 
     var arguments: [UInt8] {
         guard bytes.count > 8 else { return [] }
@@ -158,7 +196,7 @@ struct RazerResponse {
         return Int(Double(arguments[1]) / 255.0 * 100.0)
     }
 
-    /// 是否充电中
+    /// 是否充电中 (0x07/0x84 的 arguments[1] == 1)
     var isCharging: Bool? {
         guard arguments.count > 1 else { return nil }
         return arguments[1] == 1

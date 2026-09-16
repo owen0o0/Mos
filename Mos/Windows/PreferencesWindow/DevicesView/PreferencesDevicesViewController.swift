@@ -290,7 +290,11 @@ private final class DeviceRowView: NSView {
         ])
     }
 
+    private var lastState: RazerDeviceState?
+
     func update(with state: RazerDeviceState) {
+        guard lastState != state else { return }
+        lastState = state
         locationID = state.locationID
         nameLabel.stringValue = state.name
 

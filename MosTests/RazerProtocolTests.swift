@@ -62,8 +62,72 @@ final class RazerProtocolTests: XCTestCase {
         bytes[8] = 0x00
         bytes[9] = 0xC5
         let response = RazerResponse(bytes: bytes)
+        XCTAssertTrue(response.isSuccess)
         XCTAssertEqual(response.batteryPercent, Int(197.0 / 255.0 * 100.0))
-        XCTAssertEqual(response.isCharging, false)
+    }
+
+    func testResponseParsing_charging() {
+        var bytes = [UInt8](repeating: 0, count: 90)
+        bytes[0] = 0x02
+        bytes[9] = 0x01
+        XCTAssertEqual(RazerResponse(bytes: bytes).isCharging, true)
+        bytes[9] = 0x00
+        XCTAssertEqual(RazerResponse(bytes: bytes).isCharging, false)
+    }
+
+    func testResponseStatus_busyShouldRetryGetOnly() {
+        XCTAssertTrue(RazerUSBRetry.shouldRetryGet(status: RazerReportStatus.busy))
+        XCTAssertTrue(RazerUSBRetry.shouldRetryGet(status: RazerReportStatus.newCommand))
+        XCTAssertTrue(RazerUSBRetry.shouldRetryGet(status: RazerReportStatus.timeout))
+        XCTAssertFalse(RazerUSBRetry.shouldRetryGet(status: RazerReportStatus.successful))
+        XCTAssertFalse(RazerUSBRetry.shouldRetryGet(status: RazerReportStatus.failure))
+        XCTAssertFalse(RazerUSBRetry.shouldRetryGet(status: RazerReportStatus.notSupported))
+        XCTAssertEqual(RazerUSBRetry.waitMicroseconds(attempt: 0), 12_000)
+        XCTAssertGreaterThan(RazerUSBRetry.waitMicroseconds(attempt: 3), RazerUSBRetry.waitMicroseconds(attempt: 0))
+    }
+
+    func testHotPlug_firstMatchDoesNotDropExisting() {
+        let change = RazerHotPlugReconcile.apply(current: [1, 2], event: .appeared([3]))
+        XCTAssertEqual(change.add, [3])
+        XCTAssertEqual(change.remove, [])
+    }
+
+    func testHotPlug_unrelatedAppearanceDoesNotRemoveMice() {
+        let change = RazerHotPlugReconcile.apply(current: [10], event: .appeared([]))
+        XCTAssertEqual(change.add, [])
+        XCTAssertEqual(change.remove, [])
+    }
+
+    func testHotPlug_terminatedOnlyRemovesThoseIDs() {
+        let change = RazerHotPlugReconcile.apply(current: [1, 2], event: .disappeared([1, 99]))
+        XCTAssertEqual(change.add, [])
+        XCTAssertEqual(change.remove, [1])
+    }
+
+    func testHotPlug_fullSnapshotAddsAndRemoves() {
+        let change = RazerHotPlugReconcile.apply(current: [1, 2], event: .fullSnapshot([2, 3]))
+        XCTAssertEqual(change.add, [3])
+        XCTAssertEqual(change.remove, [1])
+    }
+
+    func testDeviceStateMerge_batteryOnlyPreservesDPIAndPollRate() {
+        var state = RazerDeviceState(
+            locationID: 1,
+            productID: 0x00B7,
+            name: "DeathAdder V3 Pro",
+            supportsBattery: true,
+            supportsDPI: true,
+            supportsPollRate: true,
+            batteryPercent: 80,
+            isCharging: false,
+            dpi: 3200,
+            pollRate: 1000
+        )
+        state.apply(batteryPercent: 42)
+        XCTAssertEqual(state.batteryPercent, 42)
+        XCTAssertEqual(state.isCharging, false)
+        XCTAssertEqual(state.dpi, 3200)
+        XCTAssertEqual(state.pollRate, 1000)
     }
 
     func testResponseParsing_dpi() {

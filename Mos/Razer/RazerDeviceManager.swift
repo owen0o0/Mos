@@ -7,12 +7,13 @@
 //
 
 import IOKit
+import IOKit.usb
 import CoreFoundation
 import Foundation
 import AppKit
 
 /// Razer 设备能力与当前状态 (UI 只读快照)
-struct RazerDeviceState {
+struct RazerDeviceState: Equatable {
     let locationID: UInt32
     let productID: UInt16
     let name: String
@@ -20,13 +21,55 @@ struct RazerDeviceState {
     let supportsDPI: Bool
     let supportsPollRate: Bool
 
-    var batteryPercent: Int?
-    var isCharging: Bool?
-    var dpi: Int?
-    var pollRate: Int?
+    var batteryPercent: Int? = nil
+    var isCharging: Bool? = nil
+    var dpi: Int? = nil
+    var pollRate: Int? = nil
+
+    /// 只覆盖成功读到的字段, 避免电量轮询把 DPI / 回报率冲掉.
+    mutating func apply(
+        batteryPercent: Int? = nil,
+        isCharging: Bool? = nil,
+        dpi: Int? = nil,
+        pollRate: Int? = nil
+    ) {
+        if let batteryPercent {
+            self.batteryPercent = batteryPercent
+        }
+        if let isCharging {
+            self.isCharging = isCharging
+        }
+        if let dpi {
+            self.dpi = dpi
+        }
+        if let pollRate {
+            self.pollRate = pollRate
+        }
+    }
 }
 
-/// Razer 设备管理器 (单例; IOKit 通知挂在主 RunLoop, 设备 I/O 在专用串行队列)
+/// 热插拔如何改当前句柄集合.
+/// FirstMatch / Terminated 迭代器只含本次事件, 不能当成完整设备列表.
+enum RazerHotPlugReconcile {
+    enum Event: Equatable {
+        case fullSnapshot(Set<UInt32>)
+        case appeared(Set<UInt32>)
+        case disappeared(Set<UInt32>)
+    }
+
+    static func apply(current: Set<UInt32>, event: Event) -> (add: Set<UInt32>, remove: Set<UInt32>) {
+        switch event {
+        case .fullSnapshot(let found):
+            return (add: found.subtracting(current), remove: current.subtracting(found))
+        case .appeared(let found):
+            return (add: found.subtracting(current), remove: [])
+        case .disappeared(let gone):
+            return (add: [], remove: current.intersection(gone))
+        }
+    }
+}
+
+/// Razer 设备管理器 (单例; IOKit 通知挂在主 DispatchQueue, 设备 I/O 在专用串行队列)
 final class RazerDeviceManager {
 
     static let shared = RazerDeviceManager()
@@ -40,6 +83,10 @@ final class RazerDeviceManager {
         0x00C3: ("DeathAdder V3 Pro", 0x3F, 0x1F),
     ]
 
+    private static let razerVendorID: UInt32 = 0x1532
+    /// Apple Silicon / 新 USB 栈是 IOUSBHostDevice; IOUSBDevice 留给旧系统兼容节点.
+    private static let usbServiceClasses = ["IOUSBHostDevice", kIOUSBDeviceClassName]
+
     /// 电量轮询间隔
     var batteryPollInterval: TimeInterval = 60.0
 
@@ -50,10 +97,9 @@ final class RazerDeviceManager {
 
     private let ioQueue = DispatchQueue(label: "mos.razer.io")
     private var notificationPort: IONotificationPortRef?
-    private var matchedNotification: io_object_t = 0
-    private var terminatedNotification: io_object_t = 0
+    private var hotPlugIterators: [io_object_t] = []
     private var deviceHandles: [UInt32: RazerUSBDevice] = [:]
-    /// 最近一次读取的设备状态缓存 (ioQueue 读写, publish 时快照)
+    /// 最近一次读取的设备状态缓存 (ioQueue 读写, publish 时快照到主线程)
     private var stateCache: [UInt32: RazerDeviceState] = [:]
     private var batteryTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
@@ -63,6 +109,7 @@ final class RazerDeviceManager {
     private var lastReenumerateTime: CFTimeInterval = 0
     private let reenumerateCooldown: TimeInterval = 5.0
     private var hasStarted = false
+    private var isRecoveringHandle = false
 
     private init() {}
 
@@ -72,51 +119,23 @@ final class RazerDeviceManager {
         guard !hasStarted else { return }
         hasStarted = true
 
-        // IOKit 通知 (主 RunLoop)
         guard let port = IONotificationPortCreate(mach_port_t(MACH_PORT_NULL)) else { return }
         notificationPort = port
         IONotificationPortSetDispatchQueue(port, DispatchQueue.main)
 
-        let matching = IOServiceMatching(kIOUSBDeviceClassName)
-        guard let matching else { return }
-
-        IOServiceAddMatchingNotification(
-            port,
-            kIOFirstMatchNotification,
-            matching,
-            { refcon, iterator in
-                guard let refcon else { return }
-                let manager = Unmanaged<RazerDeviceManager>.fromOpaque(refcon).takeUnretainedValue()
-                manager.consume(iterator: iterator)
-            },
-            Unmanaged.passUnretained(self).toOpaque(),
-            &matchedNotification
-        )
-
-        IOServiceAddMatchingNotification(
-            port,
-            kIOTerminatedNotification,
-            matching,
-            { refcon, iterator in
-                guard let refcon else { return }
-                let manager = Unmanaged<RazerDeviceManager>.fromOpaque(refcon).takeUnretainedValue()
-                manager.consume(iterator: iterator)
-            },
-            Unmanaged.passUnretained(self).toOpaque(),
-            &terminatedNotification
-        )
-
-        // 初始枚举 (通知回调也负责; 这里主动跑一次覆盖回调前的设备)
+        // IOServiceAddMatchingNotification 会消耗 matching 字典的一份引用, 每个 class 各建两份.
+        // macOS 27 上雷蛇鼠标是 IOUSBHostDevice, 不再保证有 IOUSBDevice 兼容节点.
+        for className in Self.usbServiceClasses {
+            registerHotPlug(port: port, className: className)
+        }
         enumerateFromIterator()
 
-        // 电量轮询
         let timer = Timer(timeInterval: batteryPollInterval, repeats: true) { [weak self] _ in
             self?.refreshBattery()
         }
         RunLoop.main.add(timer, forMode: .common)
         batteryTimer = timer
 
-        // 睡眠唤醒后 USB 设备需要时间重新就绪, 丢弃旧句柄重新枚举
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -137,81 +156,205 @@ final class RazerDeviceManager {
         }
         batteryTimer?.invalidate()
         batteryTimer = nil
-        if matchedNotification != 0 {
-            IOObjectRelease(matchedNotification)
-            matchedNotification = 0
+        for iterator in hotPlugIterators where iterator != 0 {
+            IOObjectRelease(iterator)
         }
-        if terminatedNotification != 0 {
-            IOObjectRelease(terminatedNotification)
-            terminatedNotification = 0
-        }
+        hotPlugIterators.removeAll()
         if let notificationPort {
             IONotificationPortDestroy(notificationPort)
             self.notificationPort = nil
         }
-        deviceHandles.removeAll()
-        stateCache.removeAll()
-        failureCounts.removeAll()
+        ioQueue.sync {
+            deviceHandles.removeAll()
+            stateCache.removeAll()
+            failureCounts.removeAll()
+        }
         devices = []
     }
 
     // MARK: - 枚举与热插拔
 
-    /// 从通知迭代器消费全部 service (先过滤再建句柄, 避免为无关设备开接口)
-    private func enumerateFromIterator() {
-        var iterator: io_iterator_t = 0
-        let matching = IOServiceMatching(kIOUSBDeviceClassName)
-        guard let matching,
-              IOServiceGetMatchingServices(mach_port_t(MACH_PORT_NULL), matching, &iterator) == KERN_SUCCESS else {
-            return
-        }
-        consume(iterator: iterator)
+    private func makeUSBMatching(className: String) -> CFMutableDictionary? {
+        return IOServiceMatching(className)
     }
 
-    /// 消费一个 service 迭代器, 过滤并建立 Razer 句柄
-    private func consume(iterator: io_iterator_t) {
-        var found: [UInt32: RazerUSBDevice] = [:]
+    private func registerHotPlug(port: IONotificationPortRef, className: String) {
+        guard let matchAppeared = makeUSBMatching(className: className),
+              let matchDisappeared = makeUSBMatching(className: className) else { return }
+
+        var matched: io_object_t = 0
+        var terminated: io_object_t = 0
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+
+        IOServiceAddMatchingNotification(
+            port,
+            kIOFirstMatchNotification,
+            matchAppeared,
+            { refcon, iterator in
+                guard let refcon else { return }
+                let manager = Unmanaged<RazerDeviceManager>.fromOpaque(refcon).takeUnretainedValue()
+                manager.handleAppeared(iterator: iterator)
+            },
+            refcon,
+            &matched
+        )
+        IOServiceAddMatchingNotification(
+            port,
+            kIOTerminatedNotification,
+            matchDisappeared,
+            { refcon, iterator in
+                guard let refcon else { return }
+                let manager = Unmanaged<RazerDeviceManager>.fromOpaque(refcon).takeUnretainedValue()
+                manager.handleDisappeared(iterator: iterator)
+            },
+            refcon,
+            &terminated
+        )
+
+        // 排空通知迭代器才能 arm; 不要释放, 否则后续热插拔会停.
+        if matched != 0 {
+            hotPlugIterators.append(matched)
+            handleAppeared(iterator: matched)
+        }
+        if terminated != 0 {
+            hotPlugIterators.append(terminated)
+            handleDisappeared(iterator: terminated)
+        }
+    }
+
+    /// 全量枚举 (启动 / 唤醒 / 句柄失效后重建). 一次性 iterator 必须释放.
+    private func enumerateFromIterator() {
+        var combined: [(locationID: UInt32, service: io_service_t)] = []
+        for className in Self.usbServiceClasses {
+            var iterator: io_iterator_t = 0
+            guard let matching = makeUSBMatching(className: className),
+                  IOServiceGetMatchingServices(mach_port_t(MACH_PORT_NULL), matching, &iterator) == KERN_SUCCESS else {
+                continue
+            }
+            combined.append(contentsOf: retainSupportedServices(from: iterator))
+            IOObjectRelease(iterator)
+        }
+        ioQueue.async { [weak self] in
+            self?.applyServices(combined, kind: .full)
+        }
+    }
+
+    /// FirstMatch: 只新增. 通知 iterator 不能释放, 排空即重新 arm.
+    private func handleAppeared(iterator: io_iterator_t) {
+        let services = retainSupportedServices(from: iterator)
+        ioQueue.async { [weak self] in
+            self?.applyServices(services, kind: .appeared)
+        }
+    }
+
+    /// Terminated: 只移除本次消失的雷蛇设备.
+    private func handleDisappeared(iterator: io_iterator_t) {
+        var gone: [UInt32] = []
         var service = IOIteratorNext(iterator)
         while service != 0 {
             if let locationID = registryUInt32(service, key: "locationID"),
-               isSupportedMouse(service: service),
-               let device = RazerUSBDevice(locationID: locationID, service: service) {
-                found[locationID] = device
+               isSupportedMouse(service: service) {
+                gone.append(locationID)
             }
             IOObjectRelease(service)
             service = IOIteratorNext(iterator)
         }
-        IOObjectRelease(iterator)
-
+        guard !gone.isEmpty else { return }
         ioQueue.async { [weak self] in
-            self?.synchronizeDevices(found)
+            self?.removeDevices(Set(gone), publish: true)
         }
     }
 
-    private func synchronizeDevices(_ found: [UInt32: RazerUSBDevice]) {
-        let removed = deviceHandles.keys.filter { found[$0] == nil }
-        for locationID in removed {
-            deviceHandles.removeValue(forKey: locationID)
-            stateCache.removeValue(forKey: locationID)
+    private enum ApplyKind {
+        case appeared
+        case full
+    }
+
+    private func retainSupportedServices(from iterator: io_iterator_t) -> [(locationID: UInt32, service: io_service_t)] {
+        var retained: [(locationID: UInt32, service: io_service_t)] = []
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            if let locationID = registryUInt32(service, key: "locationID"),
+               isSupportedMouse(service: service) {
+                retained.append((locationID, service))
+            } else {
+                IOObjectRelease(service)
+            }
+            service = IOIteratorNext(iterator)
+        }
+        return retained
+    }
+
+    private func applyServices(
+        _ services: [(locationID: UInt32, service: io_service_t)],
+        kind: ApplyKind
+    ) {
+        var unique: [(locationID: UInt32, service: io_service_t)] = []
+        var seen = Set<UInt32>()
+        var extras: [io_service_t] = []
+        for item in services {
+            if seen.insert(item.locationID).inserted {
+                unique.append(item)
+            } else {
+                extras.append(item.service)
+            }
+        }
+        extras.forEach { IOObjectRelease($0) }
+
+        let incomingIDs = Set(unique.map(\.locationID))
+        let reconcileEvent: RazerHotPlugReconcile.Event
+        switch kind {
+        case .appeared:
+            reconcileEvent = .appeared(incomingIDs)
+        case .full:
+            reconcileEvent = .fullSnapshot(incomingIDs)
+        }
+        let change = RazerHotPlugReconcile.apply(
+            current: Set(deviceHandles.keys),
+            event: reconcileEvent
+        )
+
+        if kind == .full {
+            removeDevices(change.remove, publish: false)
         }
 
-        var updated = false
-        for (locationID, handle) in found where deviceHandles[locationID] == nil {
+        var added = false
+        for (locationID, service) in unique {
+            defer { IOObjectRelease(service) }
+            guard change.add.contains(locationID), deviceHandles[locationID] == nil else { continue }
+            guard let handle = RazerUSBDevice(locationID: locationID, service: service) else { continue }
             if handle.open() {
                 deviceHandles[locationID] = handle
-                stateCache.removeValue(forKey: locationID)
-                updated = true
+                failureCounts[locationID] = 0
+                added = true
             }
         }
 
-        if updated || !deviceHandles.isEmpty {
+        if added {
             readAllDeviceStates()
+        } else if kind == .full {
+            publishSnapshot()
+        }
+    }
+
+    private func removeDevices(_ locationIDs: Set<UInt32>, publish: Bool) {
+        var removed = false
+        for locationID in locationIDs {
+            if let handle = deviceHandles.removeValue(forKey: locationID) {
+                handle.close()
+                removed = true
+            }
+            stateCache.removeValue(forKey: locationID)
+            failureCounts.removeValue(forKey: locationID)
+        }
+        if publish, removed {
+            publishSnapshot()
         }
     }
 
     private func isSupportedMouse(service: io_service_t) -> Bool {
         guard let vendor = registryUInt32(service, key: "idVendor"),
-              vendor == 0x1532,
+              vendor == Self.razerVendorID,
               let product = registryUInt32(service, key: "idProduct") else {
             return false
         }
@@ -232,10 +375,17 @@ final class RazerDeviceManager {
 
     // MARK: - 状态读取
 
-    /// 全量刷新 (枚举时 / 手动触发)
+    /// 全量刷新 (枚举时 / 手动触发). 句柄为空时重新扫 USB, 避免只读空列表.
     func refreshAll() {
         ioQueue.async { [weak self] in
-            self?.readAllDeviceStates()
+            guard let self else { return }
+            if self.deviceHandles.isEmpty {
+                DispatchQueue.main.async { [weak self] in
+                    self?.enumerateFromIterator()
+                }
+                return
+            }
+            self.readAllDeviceStates()
         }
     }
 
@@ -247,22 +397,23 @@ final class RazerDeviceManager {
     }
 
     private func readAllDeviceStates(batteryOnly: Bool = false) {
-        guard !deviceHandles.isEmpty else { return }
+        guard !deviceHandles.isEmpty else {
+            publishSnapshot()
+            return
+        }
         for (_, handle) in deviceHandles {
             if let state = readState(from: handle, batteryOnly: batteryOnly) {
                 stateCache[handle.locationID] = state
             }
         }
-        DispatchQueue.main.async { [weak self] in
-            self?.publishSnapshot()
-        }
+        publishSnapshot()
     }
 
-    /// 读取单个设备状态 (在 ioQueue 上调用)
+    /// 读取单个设备状态 (在 ioQueue 上调用). 失败时保留上次成功值.
     private func readState(from handle: RazerUSBDevice, batteryOnly: Bool) -> RazerDeviceState? {
         guard let spec = Self.supportedMice[handle.productID] else { return nil }
 
-        var state = RazerDeviceState(
+        var state = stateCache[handle.locationID] ?? RazerDeviceState(
             locationID: handle.locationID,
             productID: handle.productID,
             name: handle.productName,
@@ -271,49 +422,60 @@ final class RazerDeviceManager {
             supportsPollRate: true
         )
 
+        var anySuccess = false
         if let response = handle.getResponse(for: RazerCommand.battery(transactionID: spec.batteryTransaction)) {
-            state.batteryPercent = response.batteryPercent
-            state.isCharging = response.isCharging
+            state.apply(batteryPercent: response.batteryPercent)
+            anySuccess = true
         }
         if !batteryOnly {
+            if let response = handle.getResponse(for: RazerCommand.charging(transactionID: spec.batteryTransaction)) {
+                state.apply(isCharging: response.isCharging)
+                anySuccess = true
+            }
             if let response = handle.getResponse(for: RazerCommand.getDPI(transactionID: spec.miscTransaction)) {
-                state.dpi = response.dpi?.x
+                state.apply(dpi: response.dpi?.x)
+                anySuccess = true
             }
             if let response = handle.getResponse(for: RazerCommand.getPollRate(transactionID: spec.miscTransaction)) {
-                state.pollRate = response.pollRate
+                state.apply(pollRate: response.pollRate)
+                anySuccess = true
             }
         }
+
         if handle.isStale {
             handleFailure(handle.locationID)
-            return nil
+            return stateCache[handle.locationID] ?? state
+        }
+        if anySuccess {
+            failureCounts[handle.locationID] = 0
+        } else {
+            handleFailure(handle.locationID)
         }
         return state
     }
 
     /// 设备句柄失效恢复: 连续失败后先关开重试, 再不行丢弃并重新枚举
     private func handleFailure(_ locationID: UInt32) {
+        guard !isRecoveringHandle else { return }
         let count = (failureCounts[locationID] ?? 0) + 1
         failureCounts[locationID] = count
         guard count >= 2 else { return }
         failureCounts[locationID] = 0
 
-        ioQueue.async { [weak self] in
-            guard let self, let handle = self.deviceHandles[locationID] else { return }
-            handle.close()
-            if handle.open() {
-                // 重开成功: 清掉旧缓存重新读取
-                self.stateCache.removeValue(forKey: locationID)
-                if let state = self.readState(from: handle, batteryOnly: false) {
-                    self.stateCache[locationID] = state
-                }
-                DispatchQueue.main.async { self.publishSnapshot() }
-            } else {
-                // 句柄彻底失效: 丢弃并重新枚举
-                self.deviceHandles.removeValue(forKey: locationID)
-                self.stateCache.removeValue(forKey: locationID)
-                self.scheduleReenumerate()
-                DispatchQueue.main.async { self.publishSnapshot() }
+        guard let handle = deviceHandles[locationID] else { return }
+        isRecoveringHandle = true
+        defer { isRecoveringHandle = false }
+
+        handle.close()
+        if handle.open() {
+            stateCache.removeValue(forKey: locationID)
+            if let state = readState(from: handle, batteryOnly: false) {
+                stateCache[locationID] = state
             }
+        } else {
+            deviceHandles.removeValue(forKey: locationID)
+            stateCache.removeValue(forKey: locationID)
+            scheduleReenumerate()
         }
     }
 
@@ -327,6 +489,7 @@ final class RazerDeviceManager {
             self.deviceHandles.removeAll()
             self.stateCache.removeAll()
             self.failureCounts.removeAll()
+            self.publishSnapshot()
             DispatchQueue.main.async {
                 self.enumerateFromIterator()
             }
@@ -354,7 +517,7 @@ final class RazerDeviceManager {
             if let state = self.readState(from: handle, batteryOnly: false) {
                 self.stateCache[handle.locationID] = state
             }
-            DispatchQueue.main.async { self.publishSnapshot() }
+            self.publishSnapshot()
         }
     }
 
@@ -368,7 +531,7 @@ final class RazerDeviceManager {
             if let state = self.readState(from: handle, batteryOnly: false) {
                 self.stateCache[handle.locationID] = state
             }
-            DispatchQueue.main.async { self.publishSnapshot() }
+            self.publishSnapshot()
         }
     }
 
@@ -390,8 +553,11 @@ final class RazerDeviceManager {
                 ))
             }
         }
-        devices = snapshot
-        onDevicesChanged?()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.hasStarted else { return }
+            self.devices = snapshot
+            self.onDevicesChanged?()
+        }
     }
 
 }
