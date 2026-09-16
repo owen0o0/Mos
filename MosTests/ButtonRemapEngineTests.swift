@@ -18,6 +18,7 @@ final class ButtonRemapEngineTests: XCTestCase {
         TouchSimulator.testingPostHook = nil
         TouchSimulator.resetDockSwipeStateForTesting()
         DragSessionManager.shared.testingPostHook = nil
+        SystemScrollingPreferences.naturalScrollingReader = { true }
         for kind in ScrollModificationKind.allCases {
             ScrollCore.shared.setScrollModification(kind, active: false)
         }
@@ -34,6 +35,7 @@ final class ButtonRemapEngineTests: XCTestCase {
         TouchSimulator.resetDockSwipeStateForTesting()
         DragSessionManager.shared.testingPostHook = nil
         DragSessionManager.shared.stop()
+        SystemScrollingPreferences.resetReaderForTesting()
         for kind in ScrollModificationKind.allCases {
             ScrollCore.shared.setScrollModification(kind, active: false)
         }
@@ -610,6 +612,49 @@ final class ButtonRemapEngineTests: XCTestCase {
         DragSessionManager.shared.gestureStartThreshold = 7
     }
 
+    func testDrag_threeFingerSwipe_naturalScrollingOffKeepsDeviceSpaceHIDProgress() {
+        guard DockSwipeHIDEvent.isRequired, DockSwipeHIDEvent.attachIsAvailable else { return }
+        SystemScrollingPreferences.naturalScrollingReader = { false }
+        Options.shared.buttons.remaps = [
+            makeRemap(button: 3, duration: .drag, effect: .drag(mode: .threeFingerSwipe))
+        ]
+        ButtonUtils.shared.invalidateCache()
+
+        var location = CGPoint(x: 100, y: 100)
+        DragSessionManager.shared.locationProvider = { location }
+        DragSessionManager.shared.pollInterval = 0.01
+        DragSessionManager.shared.gestureStartThreshold = 3
+
+        var invertedFlags: [Int64] = []
+        var progresses: [Double] = []
+        TouchSimulator.testingPostHook = { event in
+            let hidType = event.getIntegerValueField(CGEventField(rawValue: 110)!)
+            guard hidType == 23 else { return }
+            invertedFlags.append(event.getIntegerValueField(CGEventField(rawValue: 136)!))
+            if let inspection = DockSwipeHIDEvent.inspectAttached(from: event) {
+                progresses.append(inspection.progress)
+            }
+        }
+
+        _ = InputProcessor.shared.process(mouseEvent(button: 3, phase: .down))
+        location = CGPoint(x: 120, y: 100)
+        runMainLoop(0.05)
+        _ = InputProcessor.shared.process(mouseEvent(button: 3, phase: .up))
+
+        XCTAssertEqual(invertedFlags.first, 0)
+        XCTAssertFalse(progresses.isEmpty)
+        // 右移 originOffset 为负, HID 固定映射到设备坐标系后为正. WindowServer 再套自然滚动.
+        XCTAssertGreaterThan(progresses.first ?? 0, 0)
+
+        DragSessionManager.shared.locationProvider = {
+            let loc = NSEvent.mouseLocation
+            let screenHeight = NSScreen.main?.frame.height ?? 0
+            return CGPoint(x: loc.x, y: screenHeight - loc.y)
+        }
+        DragSessionManager.shared.pollInterval = 1.0 / 60.0
+        DragSessionManager.shared.gestureStartThreshold = 7
+    }
+
     func testDrag_twoFingerSwipePostsGestureScrollStream() {
         Options.shared.buttons.remaps = [
             makeRemap(button: 3, duration: .drag, effect: .drag(mode: .twoFingerSwipe))
@@ -655,6 +700,45 @@ final class ButtonRemapEngineTests: XCTestCase {
 
         TouchSimulator.testingPostHook = nil
         DragSessionManager.shared.testingPostHook = nil
+        DragSessionManager.shared.locationProvider = {
+            let loc = NSEvent.mouseLocation
+            let screenHeight = NSScreen.main?.frame.height ?? 0
+            return CGPoint(x: loc.x, y: screenHeight - loc.y)
+        }
+        DragSessionManager.shared.pollInterval = 1.0 / 60.0
+        DragSessionManager.shared.gestureStartThreshold = 7
+    }
+
+    func testDrag_twoFingerSwipe_naturalScrollingOffNegatesDelta() {
+        SystemScrollingPreferences.naturalScrollingReader = { false }
+        Options.shared.buttons.remaps = [
+            makeRemap(button: 3, duration: .drag, effect: .drag(mode: .twoFingerSwipe))
+        ]
+        ButtonUtils.shared.invalidateCache()
+
+        var location = CGPoint(x: 100, y: 100)
+        DragSessionManager.shared.locationProvider = { location }
+        DragSessionManager.shared.pollInterval = 0.01
+        DragSessionManager.shared.gestureStartThreshold = 3
+
+        var invertedFlags: [Int64] = []
+        var scrollPointDeltaX: [Double] = []
+        TouchSimulator.testingPostHook = { event in
+            if event.getIntegerValueField(CGEventField(rawValue: 55)!) == 22 {
+                invertedFlags.append(event.getIntegerValueField(CGEventField(rawValue: 137)!))
+                scrollPointDeltaX.append(event.getDoubleValueField(CGEventField(rawValue: 97)!))
+            }
+        }
+
+        _ = InputProcessor.shared.process(mouseEvent(button: 3, phase: .down))
+        location = CGPoint(x: 120, y: 100)
+        runMainLoop(0.05)
+        _ = InputProcessor.shared.process(mouseEvent(button: 3, phase: .up))
+
+        XCTAssertEqual(invertedFlags.first, 0)
+        XCTAssertLessThan(scrollPointDeltaX.first ?? 0, -3)
+        XCTAssertGreaterThan(scrollPointDeltaX.first ?? 0, -10)
+
         DragSessionManager.shared.locationProvider = {
             let loc = NSEvent.mouseLocation
             let screenHeight = NSScreen.main?.frame.height ?? 0

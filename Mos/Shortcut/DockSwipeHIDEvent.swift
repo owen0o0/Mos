@@ -38,21 +38,20 @@ enum DockSwipeHIDEvent {
         return Runtime.shared.isAvailable
     }
 
-    /// HID 路径没有 invertedFromDevice 字段; 自然滚动时必须把 progress 和结束速度一起取反,
-    /// 只取反 progress 会让松手速度反向, 造成桌面切换回弹.
+    /// HID 没有 invertedFromDevice. progress/velocity 固定映射到设备坐标系
+    /// (相对 CGEvent originOffset 取反), 系统自然滚动由 WindowServer 再套一遍.
+    /// 若按偏好再取反, 关掉自然滚动时两次取反会抵消, 方向看起来永远是"开".
     static func payload(
         axis: DockSwipeAxis,
         phase: DockSwipePhase,
         progress: Double,
-        velocity: Double?,
-        inverted: Bool
+        velocity: Double?
     ) -> Payload {
-        let sign = inverted ? -1.0 : 1.0
         return Payload(
             motion: axis.rawValue,
-            progress: progress * sign,
+            progress: -progress,
             phase: phase,
-            velocity: velocity.map { $0 * sign }
+            velocity: velocity.map { -$0 }
         )
     }
 

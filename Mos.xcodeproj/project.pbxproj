@@ -66,6 +66,7 @@
 		F00A00000000000000000003 /* MosTests/OptionsButtonsLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00A00000000000000000004 /* MosTests/OptionsButtonsLoaderTests.swift */; };
 		F00A00000000000000000005 /* MosTests/ShortcutExecutorOpenTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00A00000000000000000006 /* MosTests/ShortcutExecutorOpenTargetTests.swift */; };
 		F00B00000000000000000001 /* MosTests/TouchSimulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00B00000000000000000002 /* MosTests/TouchSimulatorTests.swift */; };
+		F00B00000000000000000003 /* MosTests/SystemScrollingPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00B00000000000000000004 /* MosTests/SystemScrollingPreferencesTests.swift */; };
 		FE05F3803FB8885AAC70ADC5 /* MosTests/ScrollCoreHotkeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6CF5441214A14BB8FFEDA5 /* MosTests/ScrollCoreHotkeyTests.swift */; };
 		FECC8D1CC04A0A99B1E1A8EB /* MosTests/InterpolatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4A7F821E5626C63C45D698 /* MosTests/InterpolatorTests.swift */; };
 /* End PBXBuildFile section */
@@ -143,6 +144,7 @@
 		F00A00000000000000000004 /* MosTests/OptionsButtonsLoaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/OptionsButtonsLoaderTests.swift; sourceTree = SOURCE_ROOT; };
 		F00A00000000000000000006 /* MosTests/ShortcutExecutorOpenTargetTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/ShortcutExecutorOpenTargetTests.swift; sourceTree = SOURCE_ROOT; };
 		F00B00000000000000000002 /* MosTests/TouchSimulatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/TouchSimulatorTests.swift; sourceTree = SOURCE_ROOT; };
+		F00B00000000000000000004 /* MosTests/SystemScrollingPreferencesTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MosTests/SystemScrollingPreferencesTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -189,6 +191,7 @@
 				F00A00000000000000000004 /* MosTests/OptionsButtonsLoaderTests.swift */,
 				F00A00000000000000000006 /* MosTests/ShortcutExecutorOpenTargetTests.swift */,
 				F00B00000000000000000002 /* MosTests/TouchSimulatorTests.swift */,
+				F00B00000000000000000004 /* MosTests/SystemScrollingPreferencesTests.swift */,
 				AA1011FA00000000000000B1 /* MosTests/ScrollTargetApplicationRulesTests.swift */,
 				A1B2C3D4E5F6A7B8C9D0E1F3 /* MosTests/ButtonBindingTests.swift */,
 				E1C1C1C1000000000000000B /* MosTests/ClickCycleTests.swift */,
@@ -416,6 +419,7 @@
 				F00A00000000000000000003 /* MosTests/OptionsButtonsLoaderTests.swift in Sources */,
 				F00A00000000000000000005 /* MosTests/ShortcutExecutorOpenTargetTests.swift in Sources */,
 				F00B00000000000000000001 /* MosTests/TouchSimulatorTests.swift in Sources */,
+				F00B00000000000000000003 /* MosTests/SystemScrollingPreferencesTests.swift in Sources */,
 				FECC8D1CC04A0A99B1E1A8EB /* MosTests/InterpolatorTests.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* MosTests/ButtonBindingTests.swift in Sources */,
 				E1C1C1C1000000000000000A /* MosTests/ClickCycleTests.swift in Sources */,

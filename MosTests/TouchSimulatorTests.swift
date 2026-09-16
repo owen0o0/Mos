@@ -20,38 +20,35 @@ final class TouchSimulatorTests: XCTestCase {
             axis: .horizontal,
             phase: .began,
             progress: 0.25,
-            velocity: nil,
-            inverted: false
+            velocity: nil
         )
         XCTAssertEqual(payload.motion, 1)
-        XCTAssertEqual(payload.progress, 0.25)
+        XCTAssertEqual(payload.progress, -0.25, accuracy: 0.0001)
         XCTAssertEqual(payload.phase, .began)
         XCTAssertNil(payload.velocity)
     }
 
-    func testHIDPayload_invertedNegatesProgressAndVelocityTogether() {
+    func testHIDPayload_mapsOriginOffsetIntoDeviceSpace() {
         let payload = DockSwipeHIDEvent.payload(
             axis: .horizontal,
             phase: .ended,
             progress: 0.3,
-            velocity: 12.0,
-            inverted: true
+            velocity: 12.0
         )
         XCTAssertEqual(payload.progress, -0.3, accuracy: 0.0001)
         XCTAssertEqual(payload.velocity ?? 0, -12.0, accuracy: 0.0001)
     }
 
-    func testHIDPayload_notInvertedKeepsSign() {
+    func testHIDPayload_deviceSpaceKeepsProgressAndVelocityTogether() {
         let payload = DockSwipeHIDEvent.payload(
             axis: .vertical,
             phase: .ended,
             progress: -0.8,
-            velocity: -12.0,
-            inverted: false
+            velocity: -12.0
         )
         XCTAssertEqual(payload.motion, 2)
-        XCTAssertEqual(payload.progress, -0.8, accuracy: 0.0001)
-        XCTAssertEqual(payload.velocity ?? 0, -12.0, accuracy: 0.0001)
+        XCTAssertEqual(payload.progress, 0.8, accuracy: 0.0001)
+        XCTAssertEqual(payload.velocity ?? 0, 12.0, accuracy: 0.0001)
     }
 
     func testHIDPayload_pinchUsesScaleMotion() {
@@ -59,8 +56,7 @@ final class TouchSimulatorTests: XCTestCase {
             axis: .pinch,
             phase: .changed,
             progress: 0.4,
-            velocity: nil,
-            inverted: false
+            velocity: nil
         )
         XCTAssertEqual(payload.motion, 3)
     }
@@ -81,8 +77,7 @@ final class TouchSimulatorTests: XCTestCase {
             axis: .horizontal,
             phase: .ended,
             progress: 0.5,
-            velocity: 18.0,
-            inverted: false
+            velocity: 18.0
         )
         XCTAssertTrue(DockSwipeHIDEvent.attach(to: event, payload: payload))
         guard let inspection = DockSwipeHIDEvent.inspectAttached(from: event) else {
@@ -91,9 +86,9 @@ final class TouchSimulatorTests: XCTestCase {
         }
         XCTAssertEqual(inspection.type, 23)
         XCTAssertEqual(inspection.motion, 1)
-        XCTAssertEqual(inspection.progress, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(inspection.progress, -0.5, accuracy: 0.0001)
         XCTAssertEqual(inspection.flavor, 3)
-        XCTAssertEqual(inspection.velocityX, 18.0, accuracy: 0.0001)
+        XCTAssertEqual(inspection.velocityX, -18.0, accuracy: 0.0001)
     }
 
     func testPostDockSwipe_onMacOS27AttachesHIDEvent() {
@@ -118,5 +113,29 @@ final class TouchSimulatorTests: XCTestCase {
         XCTAssertEqual(inspections.first?.progress ?? 0, -0.2, accuracy: 0.0001)
         XCTAssertEqual(inspections.last?.progress ?? 0, -0.3, accuracy: 0.0001)
         XCTAssertEqual(inspections.last?.velocityX ?? 0, -10.0, accuracy: 0.0001)
+    }
+
+    func testPostDockSwipe_naturalScrollingOffKeepsSameHIDProgress() {
+        guard DockSwipeHIDEvent.isRequired else { return }
+
+        var invertedFlags: [Int64] = []
+        var progresses: [Double] = []
+        TouchSimulator.testingPostHook = { event in
+            let hidType = event.getIntegerValueField(CGEventField(rawValue: 110)!)
+            guard hidType == 23 else { return }
+            invertedFlags.append(event.getIntegerValueField(CGEventField(rawValue: 136)!))
+            if let inspection = DockSwipeHIDEvent.inspectAttached(from: event) {
+                progresses.append(inspection.progress)
+            }
+        }
+
+        TouchSimulator.postDockSwipe(delta: 0.2, axis: .horizontal, phase: .began, inverted: false)
+        TouchSimulator.resetDockSwipeStateForTesting()
+        TouchSimulator.postDockSwipe(delta: 0.2, axis: .horizontal, phase: .began, inverted: true)
+
+        XCTAssertEqual(invertedFlags, [0, 1])
+        XCTAssertEqual(progresses.count, 2)
+        XCTAssertEqual(progresses[0], progresses[1], accuracy: 0.0001)
+        XCTAssertEqual(progresses[0], -0.2, accuracy: 0.0001)
     }
 }

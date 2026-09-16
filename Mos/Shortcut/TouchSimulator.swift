@@ -247,8 +247,7 @@ enum TouchSimulator {
                 axis: axis,
                 phase: effectivePhase,
                 progress: dockSwipeOriginOffset,
-                velocity: exitSpeed,
-                inverted: effectiveInverted
+                velocity: exitSpeed
             )
             post(dockEvent, to: .cgSessionEventTap)
         }
@@ -274,14 +273,13 @@ enum TouchSimulator {
     }
 
     /// macOS 27+ 把真实 IOHIDEvent 挂到 dock swipe CGEvent 上.
-    /// HID 事件没有 invertedFromDevice 字段, 自然滚动时由 payload 把方向一起取反.
+    /// HID 走设备坐标系; 系统自然滚动由 WindowServer 按偏好套用, 不要在 payload 里再取反.
     private static func attachDockSwipeHIDEventIfNeeded(
         to event: CGEvent,
         axis: DockSwipeAxis,
         phase: DockSwipePhase,
         progress: Double,
-        velocity: Double?,
-        inverted: Bool
+        velocity: Double?
     ) {
         guard DockSwipeHIDEvent.isRequired else { return }
         let attached = DockSwipeHIDEvent.attach(
@@ -290,8 +288,7 @@ enum TouchSimulator {
                 axis: axis,
                 phase: phase,
                 progress: progress,
-                velocity: velocity,
-                inverted: inverted
+                velocity: velocity
             )
         )
         if !attached {

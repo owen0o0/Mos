@@ -50,6 +50,8 @@ final class DragSessionManager {
     private var dockAxis: DockSwipeAxis?
     /// 双指滑动平滑缓冲 (3 帧移动平均)
     private var twoFingerBuffer: [(x: Double, y: Double)] = []
+    /// 本次拖拽开始时快照的系统自然滚动, 避免手势中途翻转或每帧打偏好缓存
+    private var sessionNaturalDirection = true
 
     var isActive: Bool { activeMode != nil }
 
@@ -68,6 +70,7 @@ final class DragSessionManager {
         gestureStarted = false
         dockAxis = nil
         twoFingerBuffer.removeAll()
+        sessionNaturalDirection = SystemScrollingPreferences.isNaturalScrollingEnabled
         let startLocation = locationProvider()
         lastLocation = startLocation
 
@@ -135,7 +138,7 @@ final class DragSessionManager {
             // 启动: 累计位移补零到 N 帧, 从首帧起按平均输出 (线性摊到 N 帧, duration=3/60s)
             twoFingerBuffer = Array(repeating: (x: 0.0, y: 0.0), count: max(twoFingerSmoothingFrames - 1, 0))
             twoFingerBuffer.append((x: gestureAccumulator.x, y: gestureAccumulator.y))
-            let start = average(of: twoFingerBuffer)
+            let start = directedTwoFingerDelta(average(of: twoFingerBuffer))
             TouchSimulator.postGestureScroll(
                 deltaX: start.x,
                 deltaY: start.y,
@@ -150,7 +153,7 @@ final class DragSessionManager {
         if twoFingerBuffer.count > keep {
             twoFingerBuffer.removeFirst(twoFingerBuffer.count - keep)
         }
-        let avg = average(of: twoFingerBuffer)
+        let avg = directedTwoFingerDelta(average(of: twoFingerBuffer))
         TouchSimulator.postGestureScroll(deltaX: avg.x, deltaY: avg.y, phase: .changed, inverted: naturalDirection)
     }
 
@@ -203,9 +206,18 @@ final class DragSessionManager {
         }
     }
 
-    /// 系统"自然滚动方向"偏好 (缺失时默认自然)
+    /// 本次会话快照的系统"自然滚动方向"
     private var naturalDirection: Bool {
-        return (UserDefaults.standard.object(forKey: "com.apple.swipescrolldirection") as? Bool) ?? true
+        return sessionNaturalDirection
+    }
+
+    /// 关闭自然滚动时, 双指滑动要把位移取反.
+    /// 只改 inverted 标志在 macOS 27 上不够, WindowServer 会忽略该 CGEvent field.
+    private func directedTwoFingerDelta(_ delta: (x: Double, y: Double)) -> (x: Double, y: Double) {
+        if naturalDirection {
+            return delta
+        }
+        return (x: -delta.x, y: -delta.y)
     }
 
 }
