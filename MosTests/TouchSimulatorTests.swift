@@ -20,7 +20,8 @@ final class TouchSimulatorTests: XCTestCase {
             axis: .horizontal,
             phase: .began,
             progress: 0.25,
-            velocity: nil
+            velocity: nil,
+            inverted: false
         )
         XCTAssertEqual(payload.motion, 1)
         XCTAssertEqual(payload.progress, 0.25)
@@ -28,12 +29,25 @@ final class TouchSimulatorTests: XCTestCase {
         XCTAssertNil(payload.velocity)
     }
 
-    func testHIDPayload_verticalEnded_keepsVelocityInSameSpace() {
+    func testHIDPayload_invertedNegatesProgressAndVelocityTogether() {
+        let payload = DockSwipeHIDEvent.payload(
+            axis: .horizontal,
+            phase: .ended,
+            progress: 0.3,
+            velocity: 12.0,
+            inverted: true
+        )
+        XCTAssertEqual(payload.progress, -0.3, accuracy: 0.0001)
+        XCTAssertEqual(payload.velocity ?? 0, -12.0, accuracy: 0.0001)
+    }
+
+    func testHIDPayload_notInvertedKeepsSign() {
         let payload = DockSwipeHIDEvent.payload(
             axis: .vertical,
             phase: .ended,
             progress: -0.8,
-            velocity: -12.0
+            velocity: -12.0,
+            inverted: false
         )
         XCTAssertEqual(payload.motion, 2)
         XCTAssertEqual(payload.progress, -0.8, accuracy: 0.0001)
@@ -45,7 +59,8 @@ final class TouchSimulatorTests: XCTestCase {
             axis: .pinch,
             phase: .changed,
             progress: 0.4,
-            velocity: nil
+            velocity: nil,
+            inverted: false
         )
         XCTAssertEqual(payload.motion, 3)
     }
@@ -66,7 +81,8 @@ final class TouchSimulatorTests: XCTestCase {
             axis: .horizontal,
             phase: .ended,
             progress: 0.5,
-            velocity: 18.0
+            velocity: 18.0,
+            inverted: false
         )
         XCTAssertTrue(DockSwipeHIDEvent.attach(to: event, payload: payload))
         guard let inspection = DockSwipeHIDEvent.inspectAttached(from: event) else {
@@ -99,8 +115,8 @@ final class TouchSimulatorTests: XCTestCase {
 
         XCTAssertEqual(inspections.count, 3)
         XCTAssertEqual(inspections.first?.motion, 1)
-        XCTAssertEqual(inspections.first?.progress ?? 0, 0.2, accuracy: 0.0001)
-        XCTAssertEqual(inspections.last?.progress ?? 0, 0.3, accuracy: 0.0001)
-        XCTAssertEqual(inspections.last?.velocityX ?? 0, 10.0, accuracy: 0.0001)
+        XCTAssertEqual(inspections.first?.progress ?? 0, -0.2, accuracy: 0.0001)
+        XCTAssertEqual(inspections.last?.progress ?? 0, -0.3, accuracy: 0.0001)
+        XCTAssertEqual(inspections.last?.velocityX ?? 0, -10.0, accuracy: 0.0001)
     }
 }

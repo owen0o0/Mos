@@ -11,7 +11,7 @@ import Cocoa
 import Darwin
 
 /// 通过 SkyLight 的 `SLEventSetIOHIDEvent` 把 dock swipe `IOHIDEvent` 挂到合成 CGEvent 上.
-/// 符号全部运行时 dlsym, 避免链接私有框架, 也避免 10.13 SDK 缺失这些声明.
+/// 符号全部运行时 dlsym, 避免链接私有框架, 也避免 SDK 缺失这些声明.
 enum DockSwipeHIDEvent {
 
     /// macOS 27 起必须走 HID 挂载, 仅写 CGEvent fields 不会再驱动 Spaces / Mission Control.
@@ -38,13 +38,22 @@ enum DockSwipeHIDEvent {
         return Runtime.shared.isAvailable
     }
 
+    /// HID 路径没有 invertedFromDevice 字段; 自然滚动时必须把 progress 和结束速度一起取反,
+    /// 只取反 progress 会让松手速度反向, 造成桌面切换回弹.
     static func payload(
         axis: DockSwipeAxis,
         phase: DockSwipePhase,
         progress: Double,
-        velocity: Double?
+        velocity: Double?,
+        inverted: Bool
     ) -> Payload {
-        return Payload(motion: axis.rawValue, progress: progress, phase: phase, velocity: velocity)
+        let sign = inverted ? -1.0 : 1.0
+        return Payload(
+            motion: axis.rawValue,
+            progress: progress * sign,
+            phase: phase,
+            velocity: velocity.map { $0 * sign }
+        )
     }
 
     /// 把 dock swipe HID 事件挂到 `event` 上. 调用方仍需自己 `post`.

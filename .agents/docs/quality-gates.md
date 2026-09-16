@@ -33,10 +33,10 @@
 
 ## UI 与本地化
 
-- Swift 文案使用 `NSLocalizedString(_:comment:)`；因为 Mos 最低支持 macOS 10.13，不要使用 `String(localized:)`。
+- Swift 文案使用 `NSLocalizedString(_:comment:)` 以匹配现有 xcstrings 流程，不要使用 `String(localized:)`。
 - `Mos/Localizable.xcstrings` 和 `Mos/mul.lproj/Main.xcstrings` 保持分离。
 - 不重命名已被代码、持久化或 Interface Builder 使用的 key。
-- UI 改动检查长文本、Light/Dark Mode、Auto Layout 和 macOS 10.13 fallback。
+- UI 改动检查长文本、Light/Dark Mode、Auto Layout 和旧系统 fallback。
 
 ## 发布
 

@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Caldis/Mos/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Caldis/Mos?style=flat-square"></a>
-  <img alt="macOS 10.13+" src="https://img.shields.io/badge/macOS-10.13%2B-black?style=flat-square&logo=apple">
+  <img alt="macOS 12+" src="https://img.shields.io/badge/macOS-12%2B-black?style=flat-square&logo=apple">
   <img alt="Swift 5" src="https://img.shields.io/badge/Swift-5.0-orange?style=flat-square&logo=swift">
   <a href="LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey?style=flat-square"></a>
 </p>
@@ -44,7 +44,7 @@ Scroll roda mouse di macOS sering terasa kasar: gerakannya kurang punya inersia 
 
 Kamu juga bisa memakai Mos untuk memetakan ulang atau menulis ulang tombol mouse apa pun agar cocok dengan workflow-mu.
 
-Mos adalah utilitas menu bar gratis dan open-source untuk macOS 10.13 ke atas.
+Mos adalah utilitas menu bar gratis dan open-source untuk macOS 12 ke atas.
 
 ## Fitur Utama
 

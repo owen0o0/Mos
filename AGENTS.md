@@ -28,10 +28,10 @@
 ## 项目硬约束
 
 - Mos 是 macOS 菜单栏应用，技术栈是 Swift 5、AppKit、Xcode 工程和 Swift Package Manager。
-- 最低系统版本是 macOS 10.13。新 API 必须有 availability gate 或 fallback。
+- 最低系统版本是 macOS 12.0。新 API 必须有 availability gate 或 fallback。
 - 常规构建和测试使用共享 scheme `Debug`，不要用 `-target Mos` 代替。
 - 新增或移动 Swift 文件后，必须确认加入正确的 `Mos` / `MosTests` target，并跑一次相关 build 或 test。
-- UI 文案必须本地化；因为最低支持 macOS 10.13，Swift 代码使用 `NSLocalizedString(_:comment:)`，不要使用 `String(localized:)`。
+- UI 文案必须本地化；Swift 代码使用 `NSLocalizedString(_:comment:)` 以匹配现有 xcstrings 流程，不要使用 `String(localized:)`。
 - Logi/HID、Accessibility、签名、notarization、发布和真实设备测试都属于高风险操作，必要时先向用户确认。
 - 危险命令：`xcodebuild test` 加 `CODE_SIGNING_ALLOWED=NO` 会把 `Mos Debug.app` 重签成 adhoc，改变代码签名身份，触发 macOS TCC 重新弹"允许访问"授权窗；若此时有完整 Mos 实例在跑（带全局 CGEvent tap），模态弹窗会占住主线程冻结全部鼠标键盘输入。验证代码优先用纯 `xcodebuild build`（只编译不启动、不改签名，与 Xcode ⌘B 等价）；确需跑 test 前先 `pgrep -fl "Mos Debug.app"` 确认无实例在跑，跑完用正常身份重新 build 把 app 签回去。
 

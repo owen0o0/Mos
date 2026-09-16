@@ -69,7 +69,7 @@ Please discuss these areas before opening a large PR:
 
 ## Local Changes and Verification
 
-Mos is built with Swift 5, AppKit, Xcode, and Swift Package Manager. Match the style of the surrounding code, keep compatibility with macOS 10.13, and avoid new APIs without availability gates or fallbacks.
+Mos is built with Swift 5, AppKit, Xcode, and Swift Package Manager. Match the style of the surrounding code, keep compatibility with macOS 12, and avoid new APIs without availability gates or fallbacks.
 
 For code changes, run the relevant build or tests before opening a PR. For documentation-only changes, at least check links, image paths, and Markdown formatting.
 

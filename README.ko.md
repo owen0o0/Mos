@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Caldis/Mos/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Caldis/Mos?style=flat-square"></a>
-  <img alt="macOS 10.13+" src="https://img.shields.io/badge/macOS-10.13%2B-black?style=flat-square&logo=apple">
+  <img alt="macOS 12+" src="https://img.shields.io/badge/macOS-12%2B-black?style=flat-square&logo=apple">
   <img alt="Swift 5" src="https://img.shields.io/badge/Swift-5.0-orange?style=flat-square&logo=swift">
   <a href="LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey?style=flat-square"></a>
 </p>
@@ -44,7 +44,7 @@ macOS에서 일반 마우스 휠 스크롤은 종종 딱딱하게 느껴집니�
 
 또한 Mos를 사용해 원하는 마우스 버튼을 다시 매핑하거나 동작을 바꿔 자신의 워크플로에 맞출 수 있습니다.
 
-Mos는 macOS 10.13 이상을 지원하는 무료 오픈소스 메뉴 막대 유틸리티입니다.
+Mos는 macOS 12 이상을 지원하는 무료 오픈소스 메뉴 막대 유틸리티입니다.
 
 ## 주요 기능
 

@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Caldis/Mos/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Caldis/Mos?style=flat-square"></a>
-  <img alt="macOS 10.13+" src="https://img.shields.io/badge/macOS-10.13%2B-black?style=flat-square&logo=apple">
+  <img alt="macOS 12+" src="https://img.shields.io/badge/macOS-12%2B-black?style=flat-square&logo=apple">
   <img alt="Swift 5" src="https://img.shields.io/badge/Swift-5.0-orange?style=flat-square&logo=swift">
   <a href="LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey?style=flat-square"></a>
 </p>
@@ -44,7 +44,7 @@ Das Scrollen mit einem normalen Mausrad fühlt sich unter macOS oft sprunghaft a
 
 Außerdem kannst du mit Mos beliebige Maustasten neu belegen oder ihr Verhalten umschreiben, damit sie zu deinem Workflow passen.
 
-Mos ist ein kostenloses Open-Source-Menüleistenwerkzeug für macOS 10.13 und neuer.
+Mos ist ein kostenloses Open-Source-Menüleistenwerkzeug für macOS 12 und neuer.
 
 ## Funktionshighlights
 

@@ -17,7 +17,7 @@ Mos ships Xcode’s string catalogs instead of legacy `.strings` files. There ar
 
 `mul.lproj` is the canonical bundle for storyboard strings because we support many locales. Xcode fans out per-language nibs at build time, so do **not** split `Main.xcstrings` into multiple folders manually.
 
-The project still targets macOS 10.13, so always use `NSLocalizedString(_:comment:)` in Swift rather than `String(localized:)`.
+Always use `NSLocalizedString(_:comment:)` in Swift rather than `String(localized:)`, so keys stay in the existing xcstrings catalogs.
 
 ---
 
