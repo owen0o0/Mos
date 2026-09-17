@@ -267,7 +267,7 @@ private final class DeviceRowView: NSView {
         content.alignment = .leading
         content.spacing = 6
         content.translatesAutoresizingMaskIntoConstraints = false
-        card.contentView?.addSubview(content)
+        card.addSubview(content)
 
         NSLayoutConstraint.activate([
             card.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -378,18 +378,19 @@ private final class DeviceRowView: NSView {
 
 enum DeviceCardAppearance {
     static let cornerRadius: CGFloat = 10
-    static let borderWidth: CGFloat = 1
 
-    static func apply(to box: NSBox) {
-        box.boxType = .custom
-        box.cornerRadius = cornerRadius
-        box.borderWidth = borderWidth
-        box.borderColor = .separatorColor
-        box.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.55)
+    static func apply(to view: NSVisualEffectView) {
+        view.material = .contentBackground
+        view.blendingMode = .withinWindow
+        view.state = .followsWindowActiveState
+        view.wantsLayer = true
+        view.layer?.cornerRadius = cornerRadius
+        view.layer?.cornerCurve = .continuous
+        view.layer?.masksToBounds = true
     }
 }
 
-private final class DeviceCardView: NSBox {
+private final class DeviceCardView: NSVisualEffectView {
     init() {
         super.init(frame: .zero)
         DeviceCardAppearance.apply(to: self)

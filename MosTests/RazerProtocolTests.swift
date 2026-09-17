@@ -191,14 +191,15 @@ final class RazerProtocolTests: XCTestCase {
         XCTAssertEqual(controller?.preferredContentSize, NSSize(width: 450, height: 320))
     }
 
-    func testDeviceCardAppearance_usesCustomBoxMetricsInsteadOfLegacyBorderType() {
-        let box = NSBox()
-        DeviceCardAppearance.apply(to: box)
+    func testDeviceCardAppearance_usesInsetContentBackgroundInsteadOfOpaqueBox() {
+        let view = NSVisualEffectView()
+        DeviceCardAppearance.apply(to: view)
 
-        XCTAssertEqual(box.boxType, .custom)
-        XCTAssertEqual(box.cornerRadius, DeviceCardAppearance.cornerRadius)
-        XCTAssertEqual(box.borderWidth, DeviceCardAppearance.borderWidth)
-        XCTAssertFalse(box.isTransparent)
-        XCTAssertEqual(box.borderColor, .separatorColor)
+        XCTAssertEqual(view.material, .contentBackground)
+        XCTAssertEqual(view.blendingMode, .withinWindow)
+        XCTAssertEqual(view.state, .followsWindowActiveState)
+        XCTAssertEqual(view.layer?.cornerRadius, DeviceCardAppearance.cornerRadius)
+        XCTAssertEqual(view.layer?.cornerCurve, .continuous)
+        XCTAssertEqual(view.layer?.masksToBounds, true)
     }
 }
