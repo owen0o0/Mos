@@ -222,7 +222,8 @@ extension PreferencesApplicationViewController: NSMenuDelegate {
         // 初始化 Running 应用
         for runningApplication in NSWorkspace.shared.runningApplications {
             guard runningApplication.activationPolicy == .regular else { continue }
-            let icon = Utils.getApplicationIcon(fromPath: runningApplication.bundleURL?.path)
+            let icon = runningApplication.icon
+                ?? Utils.getApplicationIcon(fromPath: runningApplication.bundleURL?.path)
             let name = Utils.getApplicationName(fromPath: runningApplication.executableURL?.path)
             let isExist = ScrollUtils.shared.getTargetApplication(from: runningApplication) !== nil
             Utils.addMenuItem(

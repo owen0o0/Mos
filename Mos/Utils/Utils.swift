@@ -51,8 +51,21 @@ public class Utils {
     
     // 菜单
     class func attachImage(to menuItem:NSMenuItem, withImage image: NSImage) {
-        menuItem.image = image
-        menuItem.image?.size = NSSize(width: 13, height: 13)
+        // 调整大小前先拷贝：NSWorkspace.icon(forFile:) 返回的是共享缓存的 NSImage，
+        // 修改其尺寸会让同一图标之后的所有使用方（表格单元格、其他菜单）都缩小。
+        let attached = (image.copy() as? NSImage) ?? image
+        attached.size = NSSize(width: 13, height: 13)
+        menuItem.image = attached
+        // macOS 27 SDK 默认会隐藏 NSMenuItem 的符号图像和非符号图像（radar 179374305）。
+        // attachImage 的约定是：图标是菜单项身份的一部分，因此它必须保持可见
+        // ——这正是“正在运行的应用程序”子菜单中绘制 App 图标的路径。
+        revealMenuItemImage(menuItem)
+    }
+    /// 在 macOS 27+ 上保持 NSMenuItem.image 可见，因为 AppKit 默认会隐藏它们。
+    class func revealMenuItemImage(_ menuItem: NSMenuItem) {
+        if #available(macOS 27.0, *) {
+            menuItem.preferredImageVisibility = .visible
+        }
     }
     @discardableResult class func addMenuItem(to menuControl:NSMenu, title: String, icon: NSImage? = nil, action: Selector?, target: AnyObject? = nil, represent: Any? = nil) -> NSMenuItem {
         let displayTitle = icon != nil ? " " + title : title
