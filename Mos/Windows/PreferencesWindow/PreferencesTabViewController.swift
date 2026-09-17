@@ -24,6 +24,21 @@
 
 import Cocoa
 
+enum PreferencesWindowMetrics {
+    static let contentWidth: CGFloat = 450
+
+    static func windowSize(
+        forContentHeight contentHeight: CGFloat,
+        toolbarHeight: CGFloat = TOOLBAR_HEIGHT,
+        extraHeight: CGFloat = MACOS_TAHOE_COMPENSATE
+    ) -> NSSize {
+        NSSize(
+            width: contentWidth,
+            height: contentHeight + toolbarHeight + extraHeight
+        )
+    }
+}
+
 class PreferencesTabViewController: NSTabViewController {
     
     let backgroundVisualEffectView = NSVisualEffectView()
@@ -56,18 +71,21 @@ class PreferencesTabViewController: NSTabViewController {
         updateWindowSize()
     }
 
-    // 更新窗口尺寸以适应当前内容
+    // 更新窗口尺寸以适应当前内容: 只改高度, 宽度始终保持偏好面板标准宽.
+    // 若跟随 tab 内容 frame.width, 没有钉死宽度的页 (例如设备页) 会把窗口拉窄,
+    // toolbar tab 按钮随窗口重排, 看起来像切换时变宽变窄.
     func updateWindowSize() {
-        if let currentWindow = view.window, let currentContentView = tabView.subviews.first {
-            let windowSize = currentWindow.frame.size
-            let contentSize = currentContentView.frame.size
-            let heightDiff = contentSize.height + TOOLBAR_HEIGHT + MACOS_TAHOE_COMPENSATE - windowSize.height
-            let targetOrigin = NSPoint(x: currentWindow.frame.origin.x, y: currentWindow.frame.origin.y - heightDiff)
-            let targetSize = NSSize(width: contentSize.width, height: contentSize.height + TOOLBAR_HEIGHT + MACOS_TAHOE_COMPENSATE)
-            let targetRect = NSRect(origin: targetOrigin, size: targetSize)
-            Utils.groupAnimatorContainer({(context) in
-                currentWindow.setFrame(targetRect, display: true)
-            })
-        }
+        guard let currentWindow = view.window else { return }
+        let contentHeight = tabView.selectedTabViewItem?.view?.frame.height ?? 0
+        guard contentHeight > 0 else { return }
+
+        let windowSize = currentWindow.frame.size
+        let targetSize = PreferencesWindowMetrics.windowSize(forContentHeight: contentHeight)
+        let heightDiff = targetSize.height - windowSize.height
+        let targetOrigin = NSPoint(x: currentWindow.frame.origin.x, y: currentWindow.frame.origin.y - heightDiff)
+        let targetRect = NSRect(origin: targetOrigin, size: targetSize)
+        Utils.groupAnimatorContainer({(context) in
+            currentWindow.setFrame(targetRect, display: true)
+        })
     }
 }

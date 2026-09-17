@@ -10,8 +10,8 @@ import Cocoa
 
 class PreferencesDevicesViewController: NSViewController {
 
-    /// 设备页固定尺寸 (与 storyboard 场景一致, 保证 Tab 切换时窗口尺寸正确)
-    static let preferredSize = NSSize(width: 450, height: 320)
+    /// 设备页固定尺寸 (与 storyboard 场景一致, 保证 Tab 切换时窗口宽度稳定)
+    static let preferredSize = NSSize(width: PreferencesWindowMetrics.contentWidth, height: 320)
 
     private let manager = RazerDeviceManager.shared
 
@@ -93,6 +93,9 @@ class PreferencesDevicesViewController: NSViewController {
         view.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
+            view.widthAnchor.constraint(equalToConstant: Self.preferredSize.width),
+            view.heightAnchor.constraint(equalToConstant: Self.preferredSize.height),
+
             header.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 22),
             header.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -22),
