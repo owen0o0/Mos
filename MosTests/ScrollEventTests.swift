@@ -256,4 +256,201 @@ final class ScrollEventTests: XCTestCase {
         XCTAssertFalse(data.valid)
         XCTAssertEqual(data.usableValue, 0.0)
     }
+
+    // MARK: - HID 手势滚轮适配 (iPhone 镜像等)
+
+    func testGestureScrollTarget_includesIPhoneMirroring() {
+        XCTAssertTrue(GestureScrollTarget.knownBundleIDs.contains("com.apple.ScreenContinuity"))
+        XCTAssertTrue(GestureScrollTarget.matches(bundleIdentifier: "com.apple.ScreenContinuity"))
+        XCTAssertFalse(GestureScrollTarget.matches(bundleIdentifier: "com.apple.Safari"))
+    }
+
+    func testGestureScrollTarget_canRegisterAnotherApp() {
+        GestureScrollTarget.testingAdditionalBundleIDs = ["com.example.Mirror"]
+        defer { GestureScrollTarget.testingAdditionalBundleIDs = [] }
+        XCTAssertTrue(GestureScrollTarget.matches(bundleIdentifier: "com.example.Mirror"))
+        XCTAssertTrue(GestureScrollTarget.knownBundleIDs.contains("com.apple.ScreenContinuity"))
+    }
+
+    func testGestureScroll_pixelDeltas_discreteLineTickScalesToStep() throws {
+        let cgEvent = try XCTUnwrap(makeScrollEvent(deltaAxis1: 1))
+        let scrollEvent = ScrollEvent(with: cgEvent)
+        let pixels = GestureScrollAdapter.pixelDeltas(from: scrollEvent, step: 33.6)
+        XCTAssertEqual(pixels.y, 33.6, accuracy: 1e-9)
+        XCTAssertEqual(pixels.x, 0)
+    }
+
+    func testGestureScroll_pixelDeltas_negativeDiscreteTickScalesNegative() throws {
+        let cgEvent = try XCTUnwrap(makeScrollEvent(deltaAxis1: -1))
+        let scrollEvent = ScrollEvent(with: cgEvent)
+        let pixels = GestureScrollAdapter.pixelDeltas(from: scrollEvent, step: 33.6)
+        XCTAssertEqual(pixels.y, -33.6, accuracy: 1e-9)
+    }
+
+    func testGestureScroll_pixelDeltas_pointDeltaKeepsPixels() throws {
+        let cgEvent = try XCTUnwrap(makeScrollEvent(ptDeltaAxis1: 12.0))
+        let scrollEvent = ScrollEvent(with: cgEvent)
+        let pixels = GestureScrollAdapter.pixelDeltas(from: scrollEvent, step: 33.6)
+        XCTAssertEqual(pixels.y, 12.0, accuracy: 1e-9)
+        XCTAssertFalse(scrollEvent.Y.fixed)
+    }
+
+    func testGestureScroll_pixelDeltas_tinyStepStillMeetsMinimumScale() throws {
+        let cgEvent = try XCTUnwrap(makeScrollEvent(deltaAxis1: 1))
+        let scrollEvent = ScrollEvent(with: cgEvent)
+        let pixels = GestureScrollAdapter.pixelDeltas(from: scrollEvent, step: 10)
+        XCTAssertEqual(pixels.y, 24.0, accuracy: 1e-9, "gesture lineY = delta/10; sub-24 ticks round to 0")
+    }
+
+    func testGestureScroll_directedDeltas_reverseAxesIndependently() {
+        let both = GestureScrollAdapter.directedDeltas(x: 3, y: 10, reverseVertical: true, reverseHorizontal: true)
+        XCTAssertEqual(both.x, -3)
+        XCTAssertEqual(both.y, -10)
+        let verticalOnly = GestureScrollAdapter.directedDeltas(x: 3, y: 10, reverseVertical: true, reverseHorizontal: false)
+        XCTAssertEqual(verticalOnly.x, 3)
+        XCTAssertEqual(verticalOnly.y, -10)
+        let none = GestureScrollAdapter.directedDeltas(x: 3, y: 10, reverseVertical: false, reverseHorizontal: false)
+        XCTAssertEqual(none.x, 3)
+        XCTAssertEqual(none.y, 10)
+    }
+
+    func testGestureScroll_shouldConvert_onlyWhenReverseHasDelta() {
+        XCTAssertFalse(GestureScrollAdapter.shouldConvert(
+            isTarget: false, reverseVertical: true, reverseHorizontal: true, pixelX: 0, pixelY: 10
+        ))
+        XCTAssertFalse(GestureScrollAdapter.shouldConvert(
+            isTarget: true, reverseVertical: false, reverseHorizontal: false, pixelX: 0, pixelY: 10
+        ))
+        XCTAssertFalse(GestureScrollAdapter.shouldConvert(
+            isTarget: true, reverseVertical: true, reverseHorizontal: false, pixelX: 8, pixelY: 0
+        ), "horizontal-only tick must pass through when only vertical reverse is on")
+        XCTAssertTrue(GestureScrollAdapter.shouldConvert(
+            isTarget: true, reverseVertical: true, reverseHorizontal: false, pixelX: 0, pixelY: 10
+        ))
+    }
+
+    func testGestureScroll_plan_reverseNegatesAndSwallows() {
+        let plan = GestureScrollAdapter.plan(
+            isTarget: true,
+            pixelX: 0,
+            pixelY: 33.6,
+            reverseVertical: true,
+            reverseHorizontal: false,
+            shiftVerticalToHorizontal: false
+        )
+        XCTAssertTrue(plan.swallow)
+        XCTAssertEqual(plan.deltaY, -33.6, accuracy: 1e-9)
+        XCTAssertEqual(plan.deltaX, 0)
+    }
+
+    func testGestureScroll_plan_shiftVerticalToHorizontal() {
+        let plan = GestureScrollAdapter.plan(
+            isTarget: true,
+            pixelX: 0,
+            pixelY: 33.6,
+            reverseVertical: true,
+            reverseHorizontal: true,
+            shiftVerticalToHorizontal: true
+        )
+        XCTAssertTrue(plan.swallow)
+        XCTAssertEqual(plan.deltaX, -33.6, accuracy: 1e-9)
+        XCTAssertEqual(plan.deltaY, 0)
+    }
+
+    func testGestureScroll_axisOptions_followGlobalAndAllowlist() {
+        let savedReverse = Options.shared.scroll.reverse
+        let savedV = Options.shared.scroll.reverseVertical
+        let savedH = Options.shared.scroll.reverseHorizontal
+        let savedAllowlist = Options.shared.application.allowlist
+        defer {
+            Options.shared.scroll.reverse = savedReverse
+            Options.shared.scroll.reverseVertical = savedV
+            Options.shared.scroll.reverseHorizontal = savedH
+            Options.shared.application.allowlist = savedAllowlist
+        }
+
+        Options.shared.application.allowlist = false
+        Options.shared.scroll.reverse = true
+        Options.shared.scroll.reverseVertical = true
+        Options.shared.scroll.reverseHorizontal = false
+        let on = GestureScrollAdapter.axisOptions(application: nil)
+        XCTAssertTrue(on.reverseVertical)
+        XCTAssertFalse(on.reverseHorizontal)
+
+        Options.shared.scroll.reverse = false
+        let off = GestureScrollAdapter.axisOptions(application: nil)
+        XCTAssertFalse(off.reverseVertical)
+
+        Options.shared.scroll.reverse = true
+        Options.shared.application.allowlist = true
+        let blocked = GestureScrollAdapter.axisOptions(application: nil)
+        XCTAssertFalse(blocked.reverseVertical)
+    }
+
+    func testGestureScroll_axisOptions_perAppIgnoresAllowlist() {
+        let savedAllowlist = Options.shared.application.allowlist
+        defer { Options.shared.application.allowlist = savedAllowlist }
+        Options.shared.application.allowlist = true
+        let application = Application(path: "/Applications/iPhone Mirroring.app")
+        application.inherit = false
+        application.scroll.reverse = true
+        application.scroll.reverseVertical = true
+        application.scroll.reverseHorizontal = false
+        let options = GestureScrollAdapter.axisOptions(application: application)
+        XCTAssertTrue(options.reverseVertical)
+        XCTAssertFalse(options.reverseHorizontal)
+    }
+
+    func testGestureScroll_isTarget_usesWindowUnderPointerWhenEventPidIsNotTarget() throws {
+        GestureScrollTarget.testingMatchesUnderPointer = true
+        defer { GestureScrollTarget.testingMatchesUnderPointer = nil }
+        let cgEvent = try XCTUnwrap(makeScrollEvent(deltaAxis1: 1))
+        cgEvent.setIntegerValueField(.eventTargetUnixProcessID, value: Int64(ProcessInfo.processInfo.processIdentifier))
+        XCTAssertTrue(
+            GestureScrollTarget.isEventTarget(cgEvent),
+            "inactive iPhone Mirroring window under the cursor must still reverse"
+        )
+    }
+
+    func testGestureScroll_isTarget_ignoresNonTargetWindowUnderPointer() throws {
+        GestureScrollTarget.testingMatchesUnderPointer = false
+        defer { GestureScrollTarget.testingMatchesUnderPointer = nil }
+        let cgEvent = try XCTUnwrap(makeScrollEvent(deltaAxis1: 1))
+        cgEvent.setIntegerValueField(.eventTargetUnixProcessID, value: Int64(ProcessInfo.processInfo.processIdentifier))
+        XCTAssertFalse(GestureScrollTarget.isEventTarget(cgEvent))
+        cgEvent.setIntegerValueField(.eventTargetUnixProcessID, value: 0)
+        XCTAssertFalse(GestureScrollTarget.isEventTarget(cgEvent))
+    }
+
+    func testGestureScrollBridge_postsBeganThenEnded() {
+        let savedDelay = GestureScrollBridge.shared.endDelay
+        GestureScrollBridge.shared.endDelay = 0.05
+        var phases: [Int64] = []
+        let fieldScrollPhase = CGEventField(rawValue: 99)!
+        let fieldEventType = CGEventField(rawValue: 55)!
+        TouchSimulator.testingPostHook = { event in
+            let eventType = event.getIntegerValueField(fieldEventType)
+            if eventType == Int64(NSEvent.EventType.scrollWheel.rawValue) {
+                phases.append(event.getIntegerValueField(fieldScrollPhase))
+            }
+        }
+        defer {
+            TouchSimulator.testingPostHook = nil
+            GestureScrollBridge.shared.endDelay = savedDelay
+            GestureScrollBridge.shared.reset()
+        }
+
+        GestureScrollBridge.shared.handle(deltaX: 0, deltaY: 33.6)
+        XCTAssertEqual(phases, [GestureScrollPhase.began.rawValue])
+        GestureScrollBridge.shared.handle(deltaX: 0, deltaY: 33.6)
+        XCTAssertEqual(phases, [GestureScrollPhase.began.rawValue, GestureScrollPhase.changed.rawValue])
+
+        let ended = expectation(description: "gesture ended")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if phases.last == GestureScrollPhase.ended.rawValue {
+                ended.fulfill()
+            }
+        }
+        wait(for: [ended], timeout: 1.0)
+    }
 }

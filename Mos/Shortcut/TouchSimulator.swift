@@ -124,7 +124,8 @@ enum TouchSimulator {
         deltaX: Double,
         deltaY: Double,
         phase: GestureScrollPhase,
-        inverted: Bool
+        inverted: Bool,
+        tap: CGEventTapLocation = .cgSessionEventTap
     ) {
         // 只有 ended 相位允许零 delta (对齐真实触控板行为)
         if deltaX == 0 && deltaY == 0 && phase != .ended {
@@ -150,7 +151,7 @@ enum TouchSimulator {
         scrollEvent?.setIntegerValueField(fieldScrollPhase, value: phase.rawValue)
         scrollEvent?.setIntegerValueField(fieldMomentumPhase, value: 0)
         if let scrollEvent {
-            post(scrollEvent, to: .cgSessionEventTap)
+            post(scrollEvent, to: tap)
         }
 
         // 事件 2: gesture (55=29, subtype 110=6 scroll)
@@ -161,7 +162,7 @@ enum TouchSimulator {
         gestureEvent?.setDoubleValueField(fieldGestureDeltaY, value: deltaY)
         gestureEvent?.setIntegerValueField(fieldEventPhase, value: phase.rawValue)
         if let gestureEvent {
-            post(gestureEvent, to: .cgSessionEventTap)
+            post(gestureEvent, to: tap)
         }
     }
 

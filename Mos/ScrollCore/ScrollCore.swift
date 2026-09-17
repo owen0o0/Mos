@@ -72,6 +72,9 @@ class ScrollCore: ScrollActionPort, ScrollModificationPort {
     var scrollEventInterceptor: Interceptor?
     var hotkeyEventInterceptor: Interceptor?
     var mouseEventInterceptor: Interceptor?
+    /// 只吃 HID/手势滚轮的 App (iPhone 镜像等) 走 HID 头拦截; 普通滚动仍走 annotated session
+    var gestureScrollEventInterceptor: Interceptor?
+    private var gestureScrollActivateObserver: NSObjectProtocol?
     // 拦截掩码
     let scrollEventMask = CGEventMask(1 << CGEventType.scrollWheel.rawValue)
     let hotkeyEventMask: CGEventMask = {
@@ -235,6 +238,52 @@ class ScrollCore: ScrollActionPort, ScrollModificationPort {
         } else {
             return Unmanaged.passUnretained(event)
         }
+    }
+
+    // MARK: - HID 手势滚轮 (iPhone 镜像等)
+
+    /// HID 头拦截: 这类 App 在更底层吃原始滚轮, annotated session 里的反转到不了它.
+    /// 反转开启时吞掉滚轮, 改投 gesture scroll. 目标按鼠标下窗口判断, 不要求前台激活.
+    let gestureScrollCallBack: CGEventTapCallBack = { _, type, event, _ in
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            return Unmanaged.passUnretained(event)
+        }
+        if type != .scrollWheel {
+            return Unmanaged.passUnretained(event)
+        }
+        if ScrollUtils.shared.isSyntheticSmoothEvent(event) {
+            return Unmanaged.passUnretained(event)
+        }
+        if event.getIntegerValueField(.eventSourceUserData) == MosEventMarker.syntheticCustom {
+            return Unmanaged.passUnretained(event)
+        }
+        if ScrollUtils.shared.isRemoteSmoothedEvent(event) {
+            return Unmanaged.passUnretained(event)
+        }
+        guard let targetApp = GestureScrollTarget.resolvedApplication(for: event) else {
+            return Unmanaged.passUnretained(event)
+        }
+        let scrollEvent = ScrollEvent(with: event)
+        if scrollEvent.isTrackpad() {
+            return Unmanaged.passUnretained(event)
+        }
+        let application = ScrollUtils.shared.getTargetApplication(from: targetApp)
+        let options = GestureScrollAdapter.axisOptions(application: application)
+        let pixels = GestureScrollAdapter.pixelDeltas(from: scrollEvent, step: options.step)
+        let willShift = ScrollCore.shared.toggleScroll && pixels.y != 0 && pixels.x == 0
+        let plan = GestureScrollAdapter.plan(
+            isTarget: true,
+            pixelX: pixels.x,
+            pixelY: pixels.y,
+            reverseVertical: options.reverseVertical,
+            reverseHorizontal: options.reverseHorizontal,
+            shiftVerticalToHorizontal: willShift
+        )
+        guard plan.swallow else {
+            return Unmanaged.passUnretained(event)
+        }
+        GestureScrollBridge.shared.handle(deltaX: plan.deltaX, deltaY: plan.deltaY)
+        return nil
     }
 
     // MARK: - 滚动修饰
@@ -759,6 +808,8 @@ class ScrollCore: ScrollActionPort, ScrollModificationPort {
                 placeAt: .tailAppendEventTap,
                 for: .listenOnly
             )
+            installGestureScrollInterceptor()
+            startGestureScrollTapWatch()
             // 初始化滚动事件发送器
             ScrollPoster.shared.create()
             ScrollPoster.shared.startKeeper()
@@ -775,12 +826,54 @@ class ScrollCore: ScrollActionPort, ScrollModificationPort {
         ScrollPoster.shared.stop()
         ScrollPoster.shared.stopKeeper()
         // 停止截取事件
+        stopGestureScrollTapWatch()
         scrollEventInterceptor?.stop()
         hotkeyEventInterceptor?.stop()
         mouseEventInterceptor?.stop()
+        gestureScrollEventInterceptor?.stop()
         // 显式释放, 避免旧 tap 残留在对象图中
         scrollEventInterceptor = nil
         hotkeyEventInterceptor = nil
         mouseEventInterceptor = nil
+        gestureScrollEventInterceptor = nil
+    }
+
+    /// 目标 App 若后挂 HID headInsert, 会排到 Mos 前面吃原始滚轮; 激活时重装保住顺序.
+    private func installGestureScrollInterceptor() {
+        gestureScrollEventInterceptor?.stop()
+        gestureScrollEventInterceptor = nil
+        do {
+            gestureScrollEventInterceptor = try Interceptor(
+                event: scrollEventMask,
+                handleBy: gestureScrollCallBack,
+                listenOn: .cghidEventTap,
+                placeAt: .headInsertEventTap,
+                for: .defaultTap
+            )
+        } catch {
+            print("[ScrollCore] Create Gesture Scroll Interceptor failure: \(error)")
+        }
+    }
+
+    private func startGestureScrollTapWatch() {
+        guard gestureScrollActivateObserver == nil else { return }
+        gestureScrollActivateObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            if GestureScrollTarget.matches(app) {
+                self?.installGestureScrollInterceptor()
+            }
+        }
+    }
+
+    private func stopGestureScrollTapWatch() {
+        if let observer = gestureScrollActivateObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            gestureScrollActivateObserver = nil
+        }
+        GestureScrollBridge.shared.reset()
     }
 }
