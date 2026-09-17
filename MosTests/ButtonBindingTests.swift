@@ -700,14 +700,10 @@ final class ButtonBindingTests: XCTestCase {
     }
 
     func testActionDisplayRenderer_keyComboUsesPopupButtonAppearanceWhenRasterizing() {
-        guard #available(macOS 10.14, *),
-              let darkAppearance = NSAppearance(named: .darkAqua),
+        guard let darkAppearance = NSAppearance(named: .darkAqua),
               let lightAppearance = NSAppearance(named: .aqua) else {
             return
         }
-
-        let previousCurrentAppearance = NSAppearance.current
-        defer { NSAppearance.current = previousCurrentAppearance }
 
         let presentation = ActionPresentation(
             kind: .keyCombo,
@@ -719,13 +715,15 @@ final class ButtonBindingTests: XCTestCase {
 
         let darkPopupButton = makeActionPopupButton()
         darkPopupButton.appearance = darkAppearance
-        NSAppearance.current = lightAppearance
-        ActionDisplayRenderer().render(presentation, into: darkPopupButton)
+        lightAppearance.performAsCurrentDrawingAppearance {
+            ActionDisplayRenderer().render(presentation, into: darkPopupButton)
+        }
 
         let lightPopupButton = makeActionPopupButton()
         lightPopupButton.appearance = lightAppearance
-        NSAppearance.current = darkAppearance
-        ActionDisplayRenderer().render(presentation, into: lightPopupButton)
+        darkAppearance.performAsCurrentDrawingAppearance {
+            ActionDisplayRenderer().render(presentation, into: lightPopupButton)
+        }
 
         guard let darkImage = (darkPopupButton.cell as? NSPopUpButtonCell)?.menuItem?.image,
               let lightImage = (lightPopupButton.cell as? NSPopUpButtonCell)?.menuItem?.image,
@@ -737,7 +735,7 @@ final class ButtonBindingTests: XCTestCase {
         XCTAssertGreaterThan(
             darkLuminance,
             lightLuminance + 0.2,
-            "Expected keyCombo bitmap colors to follow the popup button appearance, not NSAppearance.current"
+            "Expected keyCombo bitmap colors to follow the popup button appearance, not the current drawing appearance"
         )
     }
 

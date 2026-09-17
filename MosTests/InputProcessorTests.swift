@@ -1,4 +1,5 @@
 import XCTest
+import UniformTypeIdentifiers
 @testable import Mos_Debug
 
 final class InputProcessorTests: XCTestCase {
@@ -954,6 +955,21 @@ final class InputProcessorTests: XCTestCase {
 
         XCTAssertEqual(store.previewText(for: .buttonEvent), "")
         XCTAssertEqual(store.exportText(for: .buttonEvent), "")
+    }
+
+    func testMonitorLogExportPanel_mapsLogAndTxtExtensions() {
+        let types = MonitorLogExportPanel.allowedContentTypes()
+        let extensions = Set(types.flatMap { type -> [String] in
+            (type.tags[.filenameExtension] ?? []) + [type.preferredFilenameExtension].compactMap { $0 }
+        })
+
+        XCTAssertFalse(types.isEmpty)
+        XCTAssertTrue(extensions.contains("log"), "Export panel should still accept .log")
+        XCTAssertTrue(extensions.contains("txt"), "Export panel should still accept .txt")
+    }
+
+    func testMonitorLogExportPanel_fallsBackToPlainTextWhenExtensionsAreUnknown() {
+        XCTAssertEqual(MonitorLogExportPanel.allowedContentTypes(forExtensions: []), [.plainText])
     }
 
     func testMonitorButtonEventLogLine_includesMouseModifierFlags() {

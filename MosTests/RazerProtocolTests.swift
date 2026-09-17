@@ -190,4 +190,15 @@ final class RazerProtocolTests: XCTestCase {
         XCTAssertEqual(controller?.view.frame.size, NSSize(width: 450, height: 320))
         XCTAssertEqual(controller?.preferredContentSize, NSSize(width: 450, height: 320))
     }
+
+    func testDeviceCardAppearance_usesCustomBoxMetricsInsteadOfLegacyBorderType() {
+        let box = NSBox()
+        DeviceCardAppearance.apply(to: box)
+
+        XCTAssertEqual(box.boxType, .custom)
+        XCTAssertEqual(box.cornerRadius, DeviceCardAppearance.cornerRadius)
+        XCTAssertEqual(box.borderWidth, DeviceCardAppearance.borderWidth)
+        XCTAssertFalse(box.isTransparent)
+        XCTAssertEqual(box.borderColor, .separatorColor)
+    }
 }

@@ -635,14 +635,11 @@ final class FileSlotView: NSView {
     }
 
     private static func placeholderImage() -> NSImage? {
-        if #available(macOS 11.0, *),
-           let symbol = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: nil) {
-            symbol.isTemplate = true
-            return symbol
+        guard let symbol = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: nil) else {
+            return nil
         }
-        let icon = NSWorkspace.shared.icon(forFileType: "app")
-        icon.size = NSSize(width: 24, height: 24)
-        return icon
+        symbol.isTemplate = true
+        return symbol
     }
 
     // MARK: Filled subview
@@ -770,10 +767,7 @@ final class FileSlotView: NSView {
     }
 
     private var accentColor: NSColor {
-        if #available(macOS 10.14, *) {
-            return NSColor.controlAccentColor
-        }
-        return NSColor.alternateSelectedControlColor
+        .controlAccentColor
     }
 
     private func animateScale(to scale: CGFloat) {

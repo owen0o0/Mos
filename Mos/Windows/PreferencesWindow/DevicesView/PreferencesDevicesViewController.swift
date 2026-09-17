@@ -376,19 +376,23 @@ private final class DeviceRowView: NSView {
 
 // MARK: - 卡片背景 (圆角 + 底色)
 
+enum DeviceCardAppearance {
+    static let cornerRadius: CGFloat = 10
+    static let borderWidth: CGFloat = 1
+
+    static func apply(to box: NSBox) {
+        box.boxType = .custom
+        box.cornerRadius = cornerRadius
+        box.borderWidth = borderWidth
+        box.borderColor = .separatorColor
+        box.fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.55)
+    }
+}
+
 private final class DeviceCardView: NSBox {
     init() {
         super.init(frame: .zero)
-        boxType = .custom
-        borderType = .lineBorder
-        cornerRadius = 10
-        if #available(macOS 10.14, *) {
-            borderColor = .separatorColor
-            fillColor = NSColor.controlBackgroundColor.withAlphaComponent(0.55)
-        } else {
-            borderColor = .gridColor
-            fillColor = .controlBackgroundColor
-        }
+        DeviceCardAppearance.apply(to: self)
     }
 
     required init?(coder: NSCoder) {

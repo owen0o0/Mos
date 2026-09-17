@@ -13,12 +13,7 @@ class Archieve {
      * 通知
      */
     class func sendNotificationMessage(_ title:String, _ subTitle:String) {
-        // 定义通知
-        let notification = NSUserNotification()
-        notification.title = title
-        notification.subtitle = subTitle
-        // 发送通知
-        NSUserNotificationCenter.default.deliver(notification)
+        UserNotificationService.shared.send(title: title, subtitle: subTitle)
     }
     
     /*

@@ -60,16 +60,8 @@ struct ActionDisplayRenderer {
             return
         }
 
-        let renderBody = {
+        popupButton.effectiveAppearance.performAsCurrentDrawingAppearance {
             renderResolved(presentation, placeholderItem: placeholderItem, popupButton: popupButton)
-        }
-        if #available(macOS 10.14, *) {
-            let previousAppearance = NSAppearance.current
-            NSAppearance.current = popupButton.effectiveAppearance
-            defer { NSAppearance.current = previousAppearance }
-            renderBody()
-        } else {
-            renderBody()
         }
     }
 
@@ -303,16 +295,13 @@ struct ActionDisplayRenderer {
     }
 
     private static func isDarkModeForCurrentAppearance() -> Bool {
-        if #available(macOS 10.14, *) {
-            return NSAppearance.current.bestMatch(
-                from: [
-                    .darkAqua,
-                    .vibrantDark,
-                    .accessibilityHighContrastDarkAqua,
-                    .accessibilityHighContrastVibrantDark
-                ]
-            ) != nil
-        }
-        return Utils.isDarkMode(for: nil)
+        NSAppearance.currentDrawing().bestMatch(
+            from: [
+                .darkAqua,
+                .vibrantDark,
+                .accessibilityHighContrastDarkAqua,
+                .accessibilityHighContrastVibrantDark
+            ]
+        ) != nil
     }
 }
