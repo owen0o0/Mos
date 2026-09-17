@@ -155,16 +155,12 @@ public class Utils {
     // Dock 图标控制
     static var isDockIconVisible = false
     class func showDockIcon() {
-        if !Utils.isDockIconVisible {
-            NSApp.setActivationPolicy(NSApplication.ActivationPolicy.regular)
-            isDockIconVisible = true
-        }
+        AppActivationPolicy.becomeRegular()
     }
     class func hideDockIcon() {
-        if WindowManager.shared.refs.count == 1 {
-            NSApp.setActivationPolicy(NSApplication.ActivationPolicy.accessory)
-            isDockIconVisible = false
-        }
+        AppActivationPolicy.restoreAccessoryIfNoWindowsRemain(
+            windowCount: WindowManager.shared.refs.count
+        )
     }
     class func toggleDockIcon() {
         if isDockIconVisible {

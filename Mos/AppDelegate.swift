@@ -133,6 +133,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UpdateManager.shared.scheduleCheckOnAppStartIfNeeded()
     }
 
+    func applicationDidResignActive(_ notification: Notification) {
+        AppActivationPolicy.handleDidResignActive()
+    }
+
     // 用户双击打开应用程序
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         guard !flag else {

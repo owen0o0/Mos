@@ -25,6 +25,9 @@ class WindowManager {
 extension WindowManager {
     // 显示对应 Identifier 的窗口
     func showWindow(withIdentifier identifier: String, withTitle title: String? = nil) {
+        if refs.isEmpty {
+            AppActivationPolicy.capturePreviousApplicationIfNeeded()
+        }
         // 检查是否在引用列表中
         guard let windowController = refs[identifier] else {
             // 如果不存在, 则从 Storyboard 获取一个实例并保存到引用列表中
@@ -39,6 +42,7 @@ extension WindowManager {
         }
         // 显示
         windowController.showWindow(self)
+        AppActivationPolicy.becomeRegular()
         // 前置并激活（已打开窗口也要置顶）
         if let window = windowController.window {
             if window.isMiniaturized {
@@ -48,16 +52,12 @@ extension WindowManager {
             window.orderFrontRegardless()
         }
         NSApp.activate(ignoringOtherApps: true)
-        // 显示 Dock 图标
-        Utils.showDockIcon()
     }
     // 关闭对应 Identifier 的窗口
     func hideWindow(withIdentifier identifier: String, destroy: Bool = false) {
-        // 隐藏 Dock 图标
-        Utils.hideDockIcon()
-        // 销毁实例
         if destroy {
             refs.removeValue(forKey: identifier)
         }
+        AppActivationPolicy.restoreAccessoryIfNoWindowsRemain(windowCount: refs.count)
     }
 }
